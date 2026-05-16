@@ -47,6 +47,7 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 - 97.7k triangles, 50.5k vertices
 - Material names: `Tex_1`, `Tex_2`, `OutLine`, `Leafs_Alfa`
 - Star meshes: `Star001_Tex_2_0`, `Star002_Tex_2_0`, `Star003_Tex_2_0` (+ `_OutLine` variants) — converted to MeshStandardMaterial with emissive yellow on load
+- Ground prop: `public/models/cute_rabbit.glb` — a small bunny + carrot; loaded after the shop, auto-scaled to ~0.45u tall and seated flush on the ground just above the floor name text. Exposed as `window.rabbit` (position/rotation are a tuned starting guess — adjust in console, then bake)
 
 ## Scope (v1) – In Scope
 
@@ -66,7 +67,8 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 - Sky gradient background
 - Cream ground plane with colored light spill
 - Shadows on ground from carton + signpost
-- Floor name text in corner
+- Floor name text in corner ("AZKA AFTAB / > FULL STACK DEVELOPER / > RESEARCHER"; `ctx.letterSpacing` is reset before the subtitles so "DEVELOPER" no longer clips off the right edge of the texture canvas)
+- Cute rabbit `.glb` prop on the ground just above the floor name text
 - Responsive layout (desktop + mobile)
 - Deployed (Vercel, Netlify, or GitHub Pages)
 
@@ -103,7 +105,7 @@ Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`. Panels curr
 
 The following are exposed to `window` for live position/scale/rotation experimentation:
 `signpostGroup`, `signMeshes`, `controls`, `camera`, `ground`, `scene`, `nameText`,
-`aboutLabel`, `HOVER_COLOR`, `aboutCamPos`, `aboutCamTarget`, `aboutDiveLerp`,
+`rabbit`, `aboutLabel`, `HOVER_COLOR`, `aboutCamPos`, `aboutCamTarget`, `aboutDiveLerp`,
 `projectsCamPos`, `projectsCamTarget`, `creditsCamPos`, `creditsCamTarget`, `flyHome()`
 
 > `creditsCamPos`/`creditsCamTarget` are still **starting guesses** — not yet tuned onto the actual circled star.
