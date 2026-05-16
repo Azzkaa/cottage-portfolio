@@ -238,10 +238,10 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
     }
 
     const _sCfg = [
-      { name: 'sign-projects',   label: 'PROJECTS',   color: '#FFD93D' }, // yellow
-      { name: 'sign-about',      label: 'ABOUT',      color: '#F2F2F0' }, // white
-      { name: 'sign-experience', label: 'EXPERIENCE', color: '#FF8C42' }, // orange
-      { name: 'sign-contact',    label: 'CONTACT',    color: '#7DC85B' }, // green
+      { name: 'sign-projects', label: 'PROJECTS', color: '#FFD93D' }, // yellow
+      { name: 'sign-about',    label: 'ABOUT',    color: '#F2F2F0' }, // white
+      { name: 'sign-articles', label: 'ARTICLES', color: '#FF8C42' }, // orange
+      { name: 'sign-credits',  label: 'CREDITS',  color: '#7DC85B' }, // green
     ];
     const _pW = 0.9, _pH = 0.32, _pD = 0.06, _vSpace = 0.42;
     const _topY = _strawCenterY + (_plaqueStack / 2) - _strawTopMargin - 0.16; // top plaque just below the straw's top
@@ -253,6 +253,7 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
       const m = new THREE.Mesh(geo, mat);
       m.name = cfg.name;
       m.userData.isInteractive = true;
+      m.userData.baseColor = cfg.color; // remembered so hover can revert
       // Stagger each plaque left/right (toward the side its arrow points) so the
       // stack zigzags into an X-ish criss-cross instead of a straight column.
       const _zig = (i % 2 === 0) ? 0.35 : -0.35;
@@ -377,6 +378,26 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
     controls.target.copy(modelCenter);
     controls.update();
 
+    // --- Camera poses for plaque navigation ---
+    _homeCamPos.copy(camera.position);
+    _homeTarget.copy(modelCenter);
+    // About: orbit round to the rear of the shop and dolly toward the base box.
+    // Tunable live: window.aboutCamPos / window.aboutCamTarget (Vector3s).
+    window.aboutCamPos = new THREE.Vector3(
+      modelCenter.x - camDistance * 0.42,
+      modelCenter.y - modelSize.y * 0.15,
+      modelCenter.z + camDistance * 0.13
+    );
+    window.aboutCamTarget = new THREE.Vector3(
+      modelCenter.x - modelSize.x * 0.30,
+      modelCenter.y - modelSize.y * 0.30,
+      modelCenter.z + modelSize.z * 0.10
+    );
+    window.flyHome = () => flyCamera(_homeCamPos, _homeTarget, 1200, () => {
+      controls.enabled = true;
+      controls.autoRotate = true;
+    });
+
     // Keep a 'center' alias for later lighting code
     const center = modelCenter;
 
@@ -499,6 +520,78 @@ const fireflyMaterial = new THREE.ShaderMaterial({
 const fireflies = new THREE.Points(fireflyGeometry, fireflyMaterial);
 scene.add(fireflies);
 
+// ===== Camera fly animation =====
+const _homeCamPos = new THREE.Vector3();
+const _homeTarget = new THREE.Vector3();
+const _tmpTarget = new THREE.Vector3();
+let _camAnim = null;
+
+function flyCamera(toPos, toTarget, durMs, onDone) {
+  _camAnim = {
+    fromPos: camera.position.clone(),
+    toPos: toPos.clone(),
+    fromTarget: controls.target.clone(),
+    toTarget: toTarget.clone(),
+    start: performance.now(),
+    dur: durMs,
+    onDone: onDone || null,
+  };
+}
+
+// ===== Plaque hover + click (raycaster) =====
+const _raycaster = new THREE.Raycaster();
+const _pointer = new THREE.Vector2();
+let _hoveredPlaque = null;
+window.HOVER_COLOR = '#FF4FA8'; // contrasting neon highlight — tunable in console
+
+function _plaqueAtEvent(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_pointer, camera);
+  const hits = _raycaster.intersectObjects(signMeshes, false);
+  return hits.length ? hits[0].object : null;
+}
+
+function _applyHover(p) {
+  p.material.color.set(window.HOVER_COLOR);
+  p.material.emissive.set(window.HOVER_COLOR);
+  p.material.emissiveIntensity = 2.6;
+}
+
+function _clearHover(p) {
+  p.material.color.set(p.userData.baseColor);
+  p.material.emissive.set(p.userData.baseColor);
+  p.material.emissiveIntensity = 1.6;
+}
+
+renderer.domElement.addEventListener('pointermove', (event) => {
+  const p = _plaqueAtEvent(event);
+  if (p === _hoveredPlaque) return;
+  if (_hoveredPlaque) _clearHover(_hoveredPlaque);
+  if (p) {
+    _applyHover(p);
+    _hoveredPlaque = p;
+    renderer.domElement.style.cursor = 'pointer';
+  } else {
+    _hoveredPlaque = null;
+    renderer.domElement.style.cursor = 'default';
+  }
+});
+
+renderer.domElement.addEventListener('click', (event) => {
+  const p = _plaqueAtEvent(event);
+  if (!p) return;
+  console.log('Plaque clicked:', p.name);
+  if (p.name === 'sign-about') {
+    controls.enabled = false;
+    controls.autoRotate = false;
+    if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
+    renderer.domElement.style.cursor = 'default';
+    flyCamera(window.aboutCamPos, window.aboutCamTarget, 1500);
+  }
+});
+
 // Resize handling
 window.addEventListener('resize', () => {
   const width = window.innerWidth;
@@ -511,7 +604,17 @@ window.addEventListener('resize', () => {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
-  controls.update(); // required when damping enabled
+  if (_camAnim) {
+    const k = Math.min((performance.now() - _camAnim.start) / _camAnim.dur, 1);
+    const e = k * k * (3 - 2 * k); // smoothstep ease
+    camera.position.lerpVectors(_camAnim.fromPos, _camAnim.toPos, e);
+    _tmpTarget.lerpVectors(_camAnim.fromTarget, _camAnim.toTarget, e);
+    camera.lookAt(_tmpTarget);
+    controls.target.copy(_tmpTarget);
+    if (k >= 1) { const done = _camAnim.onDone; _camAnim = null; if (done) done(); }
+  } else {
+    controls.update(); // required when damping enabled
+  }
   fireflyMaterial.uniforms.uTime.value = performance.now() * 0.001;
   composer.render();
 }
