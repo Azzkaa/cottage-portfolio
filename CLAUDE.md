@@ -43,8 +43,8 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 ## Model
 
 - File: `public/models/cottage.glb` (a juice carton shop, kept as "cottage" in code for consistency)
-- Source: FAB.com, artist Ergoninane, free, KHR_materials_unlit
-- 293k triangles
+- Source: Sketchfab — "Juice Carton Shop" by **Ergoni**, license **CC Attribution** (credit is required), KHR_materials_unlit. Based on art by Stef (@stefscribbles), original concept by Cheryl Doujima (@cysketch); modeled in Blender.
+- 97.7k triangles, 50.5k vertices
 - Material names: `Tex_1`, `Tex_2`, `OutLine`, `Leafs_Alfa`
 - Star meshes: `Star001_Tex_2_0`, `Star002_Tex_2_0`, `Star003_Tex_2_0` (+ `_OutLine` variants) — converted to MeshStandardMaterial with emissive yellow on load
 
@@ -58,7 +58,7 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 - **About** panel: dark wine-glass theme, tabs (About / Quick Facts / Experience); camera dives to the rear base box where `public/about-label.jpg` is stuck as a rounded sticker — placement is **absolute world coords baked from live tuning** (the old `aboutCamTarget`-relative math was unreliable)
 - **Projects** panel: white/orange whimsical theme, scrolling project list; camera flies to the hanging menu — `projectsCamPos`/`projectsCamTarget` are **baked absolute world coords**
 - **Articles**: no camera flow / panel — clicking opens the articles Google Drive link in a new tab (`noopener,noreferrer`)
-- **Credits**: camera flies up to a top-of-carton view + zooms hard into a star, then opens a full-bleed dark **Star Snake** mini-game (`src/snake.js`) — glowing orange snake eats a yellow star; keyboard/WASD + swipe + on-screen D-pad; Start / Game-Over screens
+- **Credits**: camera flies up to a top-of-carton view + zooms hard into a star, then opens a full-bleed dark **Star Snake** mini-game (`src/snake.js`) — glowing orange snake eats soft yellow stars; keyboard/WASD + swipe + on-screen D-pad; Start / Game-Over screens (no background grid). Score HUD sits top-right; the food never spawns under the floating Back button. Eating **2 stars** (`CREDITS_AT`) auto-opens an in-canvas **Credits** screen — a soft rounded yellow star frame with colored attribution text (`drawCredits`); it is terminal, leave via the Back button
 - Cute white CSS mascots peek on the About/Projects panels
 - All overlay panels are hidden pre-load via a critical inline `<style>` in `index.html` (no flash-of-panel); focus is dropped before setting `aria-hidden` on close (a11y)
 - Neon lighting + bloom post-processing
@@ -92,7 +92,7 @@ Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`. Panels curr
 - About panel → About tab (bio), Quick Facts tab, Experience tab (education + work history)
 - Projects panel → Email AI Auto-Reply, Student Portal SKSU, Fault Detection for Substations
 - Articles → opens an external Google Drive link (no panel/text content to edit)
-- Credits → Snake mini-game (no text content; tune feel/visuals in `src/snake.js`)
+- Credits → Snake mini-game; after 2 stars an in-canvas Credits screen shows model attribution (Ergoni · Stef · Cheryl Doujima · CC Attribution · Three.js). Tune feel/visuals **and the credits text** in `src/snake.js` (`drawCredits`)
 
 ## Git Branches
 
