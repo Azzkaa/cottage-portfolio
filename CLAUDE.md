@@ -9,7 +9,7 @@ metadata:
 
 ## Goal
 
-An interactive 3D scene that serves as a portfolio website. A stylized juice-carton shop sits on a cream-colored ground in a magical neon-cottagecore night atmosphere. A vertical white "straw" signpost with 4 colored arrow plaques (Projects, About, Experience, Contact) stands beside the carton — clickable plaques open HTML overlay panels with portfolio content. Author: Azka Aftab.
+An interactive 3D scene that serves as a portfolio website. A stylized juice-carton shop sits on a cream-colored ground in a magical neon-cottagecore night atmosphere. A vertical white "straw" signpost with 4 colored arrow plaques (Projects, About, Articles, Credits) stands beside the carton. Hovering a plaque highlights it; clicking one flies the camera (two-phase tween) to a spot on the shop and opens a themed HTML overlay panel with portfolio content. Author: Azka Aftab.
 
 ## Tech Stack
 
@@ -18,10 +18,12 @@ An interactive 3D scene that serves as a portfolio website. A stylized juice-car
 - **Three.js**
   - `GLTFLoader` for loading the model
   - `OrbitControls` for camera navigation
-  - `Raycaster` for detecting clicks on signs (planned)
+  - `Raycaster` for plaque hover highlight + click detection
   - `EffectComposer` + `UnrealBloomPass` for glow
   - Custom `ShaderMaterial` (sky gradient + firefly particles)
-  - `CanvasTexture` for the floor name text
+  - `CanvasTexture` for the floor name text, plaque labels, and the About box label
+  - Custom camera fly tween (`flyCamera`) — two-phase fly + dive per plaque, `flyHome()` to return
+- **HTML overlay panels** (DOM over the canvas), styled in `src/style.css`, "Quicksand" web font
 
 ## Aesthetic
 
@@ -50,8 +52,12 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 - Single .glb model loaded with auto-fit camera
 - Initial camera locked to front-3/4 view, slightly above; auto-rotate kicks in after 4 seconds
 - OrbitControls with damping
-- 4 clickable arrow plaques on a vertical straw signpost beside the carton
-- Each plaque opens an HTML overlay panel: **Projects**, **About**, **Experience**, **Contact**
+- 4 clickable arrow plaques on a vertical straw signpost: **Projects**, **About**, **Articles**, **Credits**
+- Plaque hover highlight (contrast color) + click → camera fly + HTML overlay panel
+- **About** panel: dark wine-glass theme, tabs (About / Quick Facts / Experience); camera dives to the rear base box where `public/about-label.jpg` is stuck as a rounded sticker
+- **Projects** panel: white/orange whimsical theme, scrolling project list; camera flies to the hanging menu
+- Cute white CSS mascots peek on the panels
+- **Articles** + **Credits** plaques: not yet wired (only Projects + About have flows)
 - Neon lighting + bloom post-processing
 - Firefly particle system
 - Sky gradient background
@@ -78,12 +84,11 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 
 ## Content Source
 
-Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`:
+Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`. Panels currently hold **editable placeholders** marked `<!-- EDIT THESE -->` in `index.html` — swap in real content:
 
-- Bio + photo (About panel)
-- 3 projects: Email AI Auto-Reply, Student Portal SKSU, Fault Detection for Substations (Projects panel)
-- Education + work history (Experience panel)
-- Email, GitHub, LinkedIn, resume link (Contact panel)
+- About panel → About tab (bio), Quick Facts tab, Experience tab (education + work history)
+- Projects panel → Email AI Auto-Reply, Student Portal SKSU, Fault Detection for Substations
+- Articles / Credits: plaques exist but no panel/flow yet
 
 ## Git Branches
 
@@ -93,7 +98,9 @@ Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`:
 ## Console-Exposed Globals (for live tweaking in DevTools)
 
 The following are exposed to `window` for live position/scale/rotation experimentation:
-`signpostGroup`, `signMeshes`, `controls`, `camera`, `ground`, `scene`, `nameText`
+`signpostGroup`, `signMeshes`, `controls`, `camera`, `ground`, `scene`, `nameText`,
+`aboutLabel`, `HOVER_COLOR`, `aboutCamPos`, `aboutCamTarget`, `aboutDiveLerp`,
+`projectsCamPos`, `projectsCamTarget`, `flyHome()`
 
 Workflow: type commands in browser console (e.g. `signpostGroup.position.x = -0.5`), see changes live, then ask the assistant to hardcode final values.
 

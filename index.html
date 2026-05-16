@@ -8,6 +8,89 @@
   </head>
   <body>
     <div id="app"></div>
+
+    <div id="about-panel" class="panel" aria-hidden="true">
+      <div class="panel-stage">
+      <div class="panel-inner" role="dialog" aria-label="About Azka Aftab">
+        <button class="panel-back" type="button">&larr; Back</button>
+        <nav class="panel-tabs">
+          <button type="button" data-view="about" class="active">About</button>
+          <button type="button" data-view="facts">Quick Facts</button>
+          <button type="button" data-view="exp">Experience</button>
+        </nav>
+
+        <section class="panel-view active" data-view="about">
+          <h1>Hi, I&rsquo;m Azka Aftab</h1>
+          <p class="lead">I design and build software once in a while. I care about making things that feel fast, accessible, and enjoyable&mdash;turning ideas into experiences people actually like to use :p</p>
+          <h2>Who am I</h2>
+          <p>I enjoy shaping experiences end-to-end&mdash;from user flows and prototypes to production code and polish. Currently wrapping up at Universiti Teknologi Malaysia (CGPA 3.89).</p>
+          <h2>My approach</h2>
+          <p>Design with intent &rarr; validate fast &rarr; iterate. Type-safe, readable code; thoughtful states and loading skeletons. Documentation that future-you will actually thank you for.</p>
+        </section>
+
+        <section class="panel-view" data-view="facts">
+          <h1>Quick Facts</h1>
+          <!-- EDIT THESE: placeholder facts, swap in your real ones -->
+          <ul class="facts">
+            <li>Based in Malaysia</li>
+            <li>Final year @ Universiti Teknologi Malaysia &mdash; CGPA 3.89</li>
+            <li>Full-stack developer &amp; researcher</li>
+            <li>Currently: <em>add what you&rsquo;re building / learning</em></li>
+            <li>For fun: <em>add a hobby or two</em></li>
+          </ul>
+        </section>
+
+        <section class="panel-view" data-view="exp">
+          <h1>Experience</h1>
+          <!-- EDIT THESE: placeholder entries, swap in your real education/work -->
+          <div class="exp-item">
+            <h3>Universiti Teknologi Malaysia</h3>
+            <span class="exp-meta">Degree &middot; CGPA 3.89 &middot; expected 20XX</span>
+            <p>One line about your studies / focus.</p>
+          </div>
+          <div class="exp-item">
+            <h3>Role &mdash; Organisation</h3>
+            <span class="exp-meta">Month 20XX &ndash; Month 20XX</span>
+            <p>What you did, in a line or two.</p>
+          </div>
+        </section>
+      </div>
+        <span class="mascot mascot--tr" aria-hidden="true"><i class="mascot-face"></i></span>
+        <span class="mascot mascot--bl" aria-hidden="true"><i class="mascot-face"></i></span>
+        <span class="mascot mascot--float" aria-hidden="true"><i class="mascot-face"></i></span>
+      </div>
+    </div>
+
+    <div id="projects-panel" class="panel panel--light" aria-hidden="true">
+      <div class="panel-stage">
+      <div class="panel-inner" role="dialog" aria-label="Projects">
+        <button class="panel-back" type="button">&larr; Back</button>
+        <h1>Projects</h1>
+        <p class="lead">A few things I&rsquo;ve built &amp; shipped.</p>
+        <div class="proj-list">
+          <!-- EDIT THESE: real details from azka-aftab-25.vercel.app -->
+          <article class="proj">
+            <h3>Email AI Auto-Reply</h3>
+            <p>Automated email triage that drafts replies and routes them to Telegram for a quick approve-and-send.</p>
+            <div class="proj-tags"><span>n8n</span><span>Gmail API</span><span>OpenAI</span><span>Telegram</span></div>
+          </article>
+          <article class="proj">
+            <h3>Student Portal &mdash; SKSU</h3>
+            <p>A student records &amp; enrollment portal with role-based access.</p>
+            <div class="proj-tags"><span>Java</span><span>Spring</span><span>SQL</span></div>
+          </article>
+          <article class="proj">
+            <h3>Fault Detection for Substations</h3>
+            <p>A computer-vision model that spots faults in substation imagery.</p>
+            <div class="proj-tags"><span>Python</span><span>PyTorch</span><span>TensorFlow</span><span>OpenCV</span><span>SAM</span><span>MobileNetV2</span></div>
+          </article>
+        </div>
+      </div>
+        <span class="mascot mascot--tr" aria-hidden="true"><i class="mascot-face"></i></span>
+        <span class="mascot mascot--bl" aria-hidden="true"><i class="mascot-face"></i></span>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

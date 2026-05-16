@@ -393,10 +393,87 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
       modelCenter.y - modelSize.y * 0.30,
       modelCenter.z + modelSize.z * 0.10
     );
+    // Phase-2 dive depth: 0 = stop at aboutCamPos, 1 = all the way to the box.
+    window.aboutDiveLerp = 0.6;
     window.flyHome = () => flyCamera(_homeCamPos, _homeTarget, 1200, () => {
       controls.enabled = true;
       controls.autoRotate = true;
     });
+
+    // Projects: fly to the front and zoom into the hanging menu board.
+    // Tunable live: window.projectsCamPos / window.projectsCamTarget.
+    window.projectsCamTarget = new THREE.Vector3(
+      modelCenter.x + modelSize.x * 0.42,
+      modelCenter.y + modelSize.y * 0.18,
+      modelCenter.z + modelSize.z * 0.12
+    );
+    window.projectsCamPos = new THREE.Vector3(
+      modelCenter.x + camDistance * 0.55,
+      modelCenter.y + modelSize.y * 0.10,
+      modelCenter.z + modelSize.z * 0.05
+    );
+
+    // --- About label: the image stuck on the box, with rounded corners ---
+    {
+      const _lc = document.createElement('canvas');
+      const _lx = _lc.getContext('2d');
+      const _ltex = new THREE.CanvasTexture(_lc);
+      _ltex.colorSpace = THREE.SRGBColorSpace;
+      const aboutLabel = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshStandardMaterial({
+          map: _ltex, emissive: 0xffffff, emissiveMap: _ltex, emissiveIntensity: 0.25,
+          transparent: true, alphaTest: 0.02, roughness: 0.7, metalness: 0,
+        })
+      );
+      // Default: sit on the box face near the dive target, facing the camera.
+      const _baseH = modelSize.x * 0.08; // smaller label height (world units)
+      // Pick the box face the dive camera actually sees and stick the label
+      // flat onto it — axis-aligned to the box, NOT billboarding the camera.
+      const _d = new THREE.Vector3().subVectors(window.aboutCamPos, window.aboutCamTarget);
+      let _ry, _nx = 0, _nz = 0;
+      if (Math.abs(_d.x) >= Math.abs(_d.z)) {
+        _nx = Math.sign(_d.x) || 1;
+        _ry = _nx > 0 ? Math.PI / 2 : -Math.PI / 2;
+      } else {
+        _nz = Math.sign(_d.z) || 1;
+        _ry = _nz > 0 ? 0 : Math.PI;
+      }
+      aboutLabel.position.set(
+        window.aboutCamTarget.x + _nx * modelSize.x * 0.05,
+        window.aboutCamTarget.y - 0.1,
+        window.aboutCamTarget.z + _nz * modelSize.z * 0.05
+      );
+      aboutLabel.rotation.set(0, _ry, -0.05); // flat on the chosen face, slight askew roll
+      aboutLabel.scale.set(_baseH, _baseH, 1);
+      scene.add(aboutLabel);
+      window.aboutLabel = aboutLabel;
+      aboutLabel.visible = false; // hidden only until the image finishes loading
+
+      const _img = new Image();
+      _img.onload = () => {
+        const cap = 720;
+        const k = Math.min(1, cap / Math.max(_img.naturalWidth, _img.naturalHeight));
+        const w = Math.round(_img.naturalWidth * k);
+        const h = Math.round(_img.naturalHeight * k);
+        const r = Math.min(w, h) * 0.08; // rounded corner radius
+        _lc.width = w; _lc.height = h;
+        _lx.clearRect(0, 0, w, h);
+        _lx.beginPath();
+        _lx.moveTo(r, 0);
+        _lx.arcTo(w, 0, w, h, r);
+        _lx.arcTo(w, h, 0, h, r);
+        _lx.arcTo(0, h, 0, 0, r);
+        _lx.arcTo(0, 0, w, 0, r);
+        _lx.closePath();
+        _lx.clip();
+        _lx.drawImage(_img, 0, 0, w, h);
+        _ltex.needsUpdate = true;
+        aboutLabel.scale.set(_baseH * (w / h), _baseH, 1); // match image aspect
+        aboutLabel.visible = true;
+      };
+      _img.src = '/about-label.jpg';
+    }
 
     // Keep a 'center' alias for later lighting code
     const center = modelCenter;
@@ -538,6 +615,63 @@ function flyCamera(toPos, toTarget, durMs, onDone) {
   };
 }
 
+// ===== About panel =====
+const _panel = document.getElementById('about-panel');
+let _panelOpen = false;
+
+function _setPanelView(view) {
+  if (!_panel) return;
+  _panel.querySelectorAll('.panel-tabs button').forEach((b) =>
+    b.classList.toggle('active', b.dataset.view === view));
+  _panel.querySelectorAll('.panel-view').forEach((s) =>
+    s.classList.toggle('active', s.dataset.view === view));
+}
+
+function openAboutPanel() {
+  if (!_panel) return;
+  _panelOpen = true;
+  _setPanelView('about');
+  _panel.classList.add('open');
+  _panel.setAttribute('aria-hidden', 'false');
+}
+
+function closeAboutPanel() {
+  if (!_panelOpen) return;
+  _panelOpen = false;
+  _panel.classList.remove('open');
+  _panel.setAttribute('aria-hidden', 'true');
+  if (window.flyHome) window.flyHome();
+}
+
+if (_panel) {
+  _panel.querySelector('.panel-back').addEventListener('click', closeAboutPanel);
+  _panel.querySelectorAll('.panel-tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => _setPanelView(btn.dataset.view));
+  });
+}
+
+// ===== Projects panel =====
+const _pPanel = document.getElementById('projects-panel');
+
+function openProjectsPanel() {
+  if (!_pPanel) return;
+  _panelOpen = true;
+  _pPanel.classList.add('open');
+  _pPanel.setAttribute('aria-hidden', 'false');
+}
+
+function closeProjectsPanel() {
+  if (!_pPanel || !_pPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  _pPanel.classList.remove('open');
+  _pPanel.setAttribute('aria-hidden', 'true');
+  if (window.flyHome) window.flyHome();
+}
+
+if (_pPanel) {
+  _pPanel.querySelector('.panel-back').addEventListener('click', closeProjectsPanel);
+}
+
 // ===== Plaque hover + click (raycaster) =====
 const _raycaster = new THREE.Raycaster();
 const _pointer = new THREE.Vector2();
@@ -580,6 +714,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
 });
 
 renderer.domElement.addEventListener('click', (event) => {
+  if (_panelOpen || _camAnim) return;
   const p = _plaqueAtEvent(event);
   if (!p) return;
   console.log('Plaque clicked:', p.name);
@@ -588,7 +723,28 @@ renderer.domElement.addEventListener('click', (event) => {
     controls.autoRotate = false;
     if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
     renderer.domElement.style.cursor = 'default';
-    flyCamera(window.aboutCamPos, window.aboutCamTarget, 1500);
+    // Phase 1: orbit around to the rear base box.
+    flyCamera(window.aboutCamPos, window.aboutCamTarget, 1500, () => {
+      // Phase 2: short dive deeper into the box, then reveal the panel.
+      const innerPos = new THREE.Vector3().lerpVectors(
+        window.aboutCamPos, window.aboutCamTarget, window.aboutDiveLerp
+      );
+      flyCamera(innerPos, window.aboutCamTarget, 800, openAboutPanel);
+    });
+  }
+  if (p.name === 'sign-projects') {
+    controls.enabled = false;
+    controls.autoRotate = false;
+    if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
+    renderer.domElement.style.cursor = 'default';
+    // Phase 1: fly to the front, facing the hanging menu.
+    flyCamera(window.projectsCamPos, window.projectsCamTarget, 1500, () => {
+      // Phase 2: short dive toward the menu, then reveal the panel.
+      const innerPos = new THREE.Vector3().lerpVectors(
+        window.projectsCamPos, window.projectsCamTarget, 0.55
+      );
+      flyCamera(innerPos, window.projectsCamTarget, 800, openProjectsPanel);
+    });
   }
 });
 
