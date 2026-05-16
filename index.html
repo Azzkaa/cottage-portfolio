@@ -5,6 +5,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>cottage-portfolio</title>
+    <!-- Critical: hide overlay panels before style.css (JS-injected by Vite)
+         loads, so they don't flash visible on first paint. style.css comes
+         later in the cascade and restores .panel/.panel.open behaviour. -->
+    <style>.panel{display:none}</style>
   </head>
   <body>
     <div id="app"></div>

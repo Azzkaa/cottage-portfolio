@@ -356,6 +356,7 @@ loader.load(
     window.signpostGroup = signpostGroup;
     window.signMeshes = signMeshes;
     window.controls = controls;
+    window.camera = camera;          // needed for live camera-pose tuning
     window.ground = ground;
     window.scene = scene;
     console.log('Tip: in console try: signpostGroup.position.set(-1.2, 0, 0.8); signpostGroup.scale.set(0.6,0.6,0.6); controls.autoRotate = false;');
@@ -461,16 +462,23 @@ loader.load(
 
     // Projects: fly to the front and zoom into the hanging menu board.
     // Tunable live: window.projectsCamPos / window.projectsCamTarget.
-    window.projectsCamTarget = new THREE.Vector3(
-      modelCenter.x + modelSize.x * 0.42,
-      modelCenter.y + modelSize.y * 0.18,
-      modelCenter.z + modelSize.z * 0.12
-    );
-    window.projectsCamPos = new THREE.Vector3(
-      modelCenter.x + camDistance * 0.55,
-      modelCenter.y + modelSize.y * 0.10,
-      modelCenter.z + modelSize.z * 0.05
-    );
+    // Baked absolute world coords from live tuning (replaces the old
+    // modelSize-coefficient guesses). NOTE: the camera doesn't stop at
+    // projectsCamPos — phase 2 dives 55% toward the target, so the visible
+    // resting pose is lerp(projectsCamPos, projectsCamTarget, 0.55). These
+    // numbers were back-solved so that post-dive landing frames the menu.
+    // To re-aim: nudge projectsCamTarget (what it looks at) — +Z = left,
+    // -Z = right, +Y = up, -Y = down — then re-tune projectsCamPos.
+    window.projectsCamTarget = new THREE.Vector3(1.113, 1.605, -0.227);
+    window.projectsCamPos = new THREE.Vector3(2.346, 1.605, -0.211);
+
+    // Credits: pan up to a wide top-of-carton view, then dive into a star.
+    // Tunable live: window.creditsCamPos / window.creditsCamTarget — STARTING
+    // GUESSES ONLY, console-tune then bake exactly like projects above.
+    // creditsCamTarget should sit ON the chosen star; creditsCamPos is the
+    // pulled-back top view it flies to first (phase 1).
+    window.creditsCamTarget = new THREE.Vector3(1.0, 3.6, 0.2);
+    window.creditsCamPos = new THREE.Vector3(3.2, 3.4, 1.6);
 
     // --- About label: the image stuck on the box, with rounded corners ---
     {
@@ -485,29 +493,19 @@ loader.load(
         new THREE.MeshStandardMaterial({
           map: _ltex, emissive: 0xffffff, emissiveMap: _ltex, emissiveIntensity: 0.25,
           transparent: true, alphaTest: 0.02, roughness: 0.7, metalness: 0,
+          side: THREE.DoubleSide, // visible from either side — it's a flat sticker
         })
       );
       // Default: sit on the box face near the dive target, facing the camera.
-      const _baseH = modelSize.x * 0.08; // smaller label height (world units)
-      // Pick the box face the dive camera actually sees and stick the label
-      // flat onto it — axis-aligned to the box, NOT billboarding the camera.
-      const _d = new THREE.Vector3().subVectors(window.aboutCamPos, window.aboutCamTarget);
-      let _ry, _nx = 0, _nz = 0;
-      // Whichever axis the camera is more "in front of" decides the face.
-      if (Math.abs(_d.x) >= Math.abs(_d.z)) {
-        _nx = Math.sign(_d.x) || 1;
-        _ry = _nx > 0 ? Math.PI / 2 : -Math.PI / 2;
-      } else {
-        _nz = Math.sign(_d.z) || 1;
-        _ry = _nz > 0 ? 0 : Math.PI;
-      }
-      // Place it just proud of that face, a touch below the dive target.
-      aboutLabel.position.set(
-        window.aboutCamTarget.x + _nx * modelSize.x * 0.05,
-        window.aboutCamTarget.y - 0.1,
-        window.aboutCamTarget.z + _nz * modelSize.z * 0.05
-      );
-      aboutLabel.rotation.set(0, _ry, -0.05); // flat on the chosen face, slight askew roll
+      const _baseH = modelSize.x * 0.13; // label size on the box (world units)
+      // Absolute world placement on the carton's front box face (replaces the
+      // old aboutCamTarget-relative math, which flung the label to x ~ -6).
+      // First guess — being dialled in via screenshot feedback, then baked.
+      // rotation.y = Math.PI/2 makes the plane face +X (the front the camera
+      // approaches from). Use 0/Math.PI for a +Z/-Z (front/back) face instead.
+      aboutLabel.position.set(-1.23, 0.38, 0.55);
+      // y = face the box; z = roll the image 90° in-plane so it fills the face.
+      aboutLabel.rotation.set(0, Math.PI / 2, Math.PI / 2);
       aboutLabel.scale.set(_baseH, _baseH, 1);
       scene.add(aboutLabel);
       window.aboutLabel = aboutLabel; // tunable in the console
@@ -729,6 +727,9 @@ function closeAboutPanel() {
   if (!_panelOpen) return;
   _panelOpen = false;
   _panel.classList.remove('open');
+  // Drop focus out of the panel before hiding it: the browser blocks
+  // aria-hidden on an ancestor of the focused element (the Back button).
+  if (_panel.contains(document.activeElement)) document.activeElement.blur();
   _panel.setAttribute('aria-hidden', 'true');
   if (window.flyHome) window.flyHome();
 }
@@ -757,6 +758,9 @@ function closeProjectsPanel() {
   if (!_pPanel || !_pPanel.classList.contains('open')) return;
   _panelOpen = false;
   _pPanel.classList.remove('open');
+  // Drop focus out of the panel before hiding it: the browser blocks
+  // aria-hidden on an ancestor of the focused element (the Back button).
+  if (_pPanel.contains(document.activeElement)) document.activeElement.blur();
   _pPanel.setAttribute('aria-hidden', 'true');
   if (window.flyHome) window.flyHome();
 }
@@ -851,6 +855,37 @@ renderer.domElement.addEventListener('click', (event) => {
         window.projectsCamPos, window.projectsCamTarget, 0.55
       );
       flyCamera(innerPos, window.projectsCamTarget, 800, openProjectsPanel);
+    });
+  }
+  if (p.name === 'sign-articles') {
+    // No panel/camera flow yet — just open the articles link in a new tab.
+    // noopener,noreferrer so the opened page can't reach back via window.opener.
+    window.open(
+      'https://drive.google.com/file/d/1olnkJDiDQcGs08bzECpi2MKp7ifIjYd7/view',
+      '_blank',
+      'noopener,noreferrer'
+    );
+  }
+  if (p.name === 'sign-credits') {
+    // Same two-phase pattern as Projects, but flying up to a top-of-carton
+    // view then diving into a star. No panel yet, so re-enable controls when
+    // the dive finishes (otherwise the user is stuck on the star).
+    controls.enabled = false;
+    controls.autoRotate = false;
+    if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
+    renderer.domElement.style.cursor = 'default';
+    // Phase 1: pan up to the wide top-of-carton view.
+    flyCamera(window.creditsCamPos, window.creditsCamTarget, 1500, () => {
+      // Phase 2: zoom hard into the star, then hand control back to the user.
+      // 0.93 = camera ends 93% of the way to the star (near-max without
+      // landing inside it). Bump toward 1.0 for even closer.
+      const innerPos = new THREE.Vector3().lerpVectors(
+        window.creditsCamPos, window.creditsCamTarget, 0.93
+      );
+      flyCamera(innerPos, window.creditsCamTarget, 800, () => {
+        controls.enabled = true;
+        controls.autoRotate = true;
+      });
     });
   }
 });
