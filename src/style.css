@@ -9,7 +9,10 @@ html, body {
   background: #000;
 }
 
-canvas {
+/* The full-screen Three.js canvas only (appended directly to <body>).
+   Scoped so it never hits the nested .snake-canvas, which must size to
+   its own frame — a bare `canvas` rule forced the game viewport-wide. */
+body > canvas {
   display: block;
   width: 100vw !important;
   height: 100vh !important;
