@@ -12,15 +12,18 @@ export function createSnakeGame(rootEl) {
   const ctx = canvas.getContext('2d');
   const dpad = rootEl.querySelector('.snake-dpad');
   const frame = rootEl.querySelector('.snake-frame'); // authoritative size source
+  const backBtn = rootEl.querySelector('.panel-back'); // never spawn the star under it
 
   const CELL = 30;            // target px per grid cell (grid derived from size)
   const TICK_MS = 120;        // ms between snake steps (lower = faster)
+  const CREDITS_AT = 2;       // stars to eat before the Credits screen opens
 
   // Layout (recomputed in resize): grid size, square cell px, board origin.
   let COLS = 20, ROWS = 14, cell = CELL, ox = 0, oy = 0, vw = 600, vh = 400;
 
-  // Game state. phase: 'start' (idle, awaiting first input) | 'play' | 'over'
+  // Game state. phase: 'start' (idle) | 'play' | 'over' | 'credits' (terminal)
   let snake, dir, nextDir, food, score, phase = 'start';
+  let creditsT = 0;           // timestamp the Credits screen opened (fade-in)
   let pops = [];              // brief expanding rings when a star is eaten
   let running = false, raf = 0, acc = 0, last = 0;
 
@@ -35,12 +38,37 @@ export function createSnakeGame(rootEl) {
     placeFood();
   }
 
-  // Drop the star on a random free cell.
+  // The Back button sits over the top-left of the board; return the pixel
+  // rect it covers (drawing space), padded so a star's glow can't tuck
+  // under it. Null until the canvas/button are measurable.
+  function backBtnZone() {
+    if (!backBtn) return null;
+    const cr = canvas.getBoundingClientRect();
+    const br = backBtn.getBoundingClientRect();
+    if (!cr.width || !br.width) return null;
+    const pad = cell * 1.2;                 // clears the star body + halo
+    return {
+      x0: br.left - cr.left - pad, y0: br.top - cr.top - pad,
+      x1: br.right - cr.left + pad, y1: br.bottom - cr.top + pad,
+    };
+  }
+
+  // Drop the star on a random free cell — never on the snake, and never
+  // overlapping the Back button. Guarded so a near-full grid can't hang.
   function placeFood() {
-    let p;
+    const zone = backBtnZone();
+    const blocked = (gx, gy) => {
+      if (snake.some((s) => s.x === gx && s.y === gy)) return true;
+      if (!zone) return false;
+      const px = ox + gx * cell, py = oy + gy * cell;
+      // cell rect [px..px+cell] x [py..py+cell] intersects the button zone?
+      return !(px + cell < zone.x0 || px > zone.x1 ||
+               py + cell < zone.y0 || py > zone.y1);
+    };
+    let p, guard = 0;
     do {
       p = { x: (Math.random() * COLS) | 0, y: (Math.random() * ROWS) | 0 };
-    } while (snake.some((s) => s.x === p.x && s.y === p.y));
+    } while (blocked(p.x, p.y) && guard++ < 200);
     food = p;
   }
 
@@ -81,6 +109,7 @@ export function createSnakeGame(rootEl) {
   }
   // Leave the Start / Game-Over screen and run a round.
   function begin() {
+    if (phase === 'credits') return;   // terminal screen — leave via Back
     if (phase === 'over') newRound();
     phase = 'play';
     acc = 0; last = 0;
@@ -144,7 +173,8 @@ export function createSnakeGame(rootEl) {
     if (head.x === food.x && head.y === food.y) {
       score++;
       pops.push({ x: food.x, y: food.y, t: performance.now() });
-      placeFood();
+      if (score >= CREDITS_AT) { phase = 'credits'; creditsT = performance.now(); }
+      else placeFood();
     } else {
       snake.pop();
     }
@@ -165,6 +195,109 @@ export function createSnakeGame(rootEl) {
     ctx.closePath();
   }
 
+  // A soft, plump star. The sharp 5-point spike read as too "edgy" next to
+  // the painted juice-carton look, so the inner radius is fattened and every
+  // corner is rounded by a round-joined stroke in the same ink.
+  function softStar(x, y, r, color) {
+    const round = r * 0.34;                 // rounding thickness (tips + notches)
+    starPath(x, y, r - round / 2, r * 0.52 - round / 2);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = round;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  // The Credits screen — a soft rounded star frame with attribution,
+  // opened automatically once CREDITS_AT stars are eaten. Terminal screen:
+  // the player leaves via the panel's floating Back button.
+  function drawCredits(now) {
+    const fade = Math.min(1, (now - creditsT) / 450);   // gentle fade-in
+    ctx.fillStyle = 'rgba(10, 3, 8, 0.74)';
+    ctx.fillRect(0, 0, vw, vh);
+
+    const min = Math.min(vw, vh);
+    const cx0 = vw / 2, cy0 = vh / 2;
+    const R = min * 0.48 * (0.99 + 0.01 * Math.sin(now / 700)); // gentle breathe
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Rounded star: fatter inner radius + round joins = soft (not spiky),
+    // a dim interior so text reads, a wide soft halo, then a slim warm rim.
+    const rw = R * 0.06;
+    starPath(cx0, cy0, R - rw / 2, R * 0.56 - rw / 2);
+    ctx.fillStyle = 'rgba(32, 15, 31, 0.82)';
+    ctx.fill();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 196, 96, 0.55)';
+    ctx.shadowBlur = 30;
+    ctx.strokeStyle = 'rgba(255, 214, 130, 0.22)';
+    ctx.lineWidth = rw * 2.4;                  // soft outer halo
+    ctx.stroke();
+    const rim = ctx.createLinearGradient(0, cy0 - R, 0, cy0 + R);
+    rim.addColorStop(0, '#FFEFC2');
+    rim.addColorStop(1, '#FFC64A');
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = rw;                        // slim crisp rim
+    ctx.stroke();
+    ctx.restore();
+
+    // Title — a warm-to-pink gradient with a soft pink glow.
+    const tSize = Math.round(min * 0.05);
+    ctx.font = `800 ${tSize}px Quicksand, sans-serif`;
+    const tw = ctx.measureText('Credits').width;
+    const tGrad = ctx.createLinearGradient(cx0 - tw / 2, 0, cx0 + tw / 2, 0);
+    tGrad.addColorStop(0, '#FFD9A6');
+    tGrad.addColorStop(1, '#FF8FC8');
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 130, 180, 0.5)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = tGrad;
+    ctx.fillText('Credits', cx0, cy0 - R * 0.34);
+    ctx.restore();
+
+    // Slim divider under the title.
+    ctx.strokeStyle = 'rgba(255, 214, 150, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx0 - R * 0.15, cy0 - R * 0.22);
+    ctx.lineTo(cx0 + R * 0.15, cy0 - R * 0.22);
+    ctx.stroke();
+
+    // Attribution — each line a soft hue from the scene's neon palette.
+    // Sized down + clamped well inside the body so it clears the rim.
+    const lines = [
+      ['A portfolio by Azka Aftab',          '#FFC2A0'],
+      ['“Juice Carton Shop” — Ergoni',        '#FFD98A'],
+      ['Art: Stef (@stefscribbles)',          '#FF9ECF'],
+      ['Concept: Cheryl Doujima (@cysketch)', '#8FE3DA'],
+      ['License: CC Attribution',             '#C9B3FF'],
+      ['Built with Three.js',                 '#A8E6C9'],
+    ];
+    let fs = Math.max(9, Math.round(min * 0.021));
+    const maxW = R * 0.74;
+    ctx.font = `600 ${fs}px Quicksand, sans-serif`;
+    while (fs > 8 && lines.some(([t]) => ctx.measureText(t).width > maxW)) {
+      fs -= 1;
+      ctx.font = `600 ${fs}px Quicksand, sans-serif`;
+    }
+    const lh = fs * 1.55;
+    // Centre the block in the star's wide mid-body (slightly below centre).
+    let ty = cy0 + R * 0.02 - ((lines.length - 1) / 2) * lh;
+    for (const [t, col] of lines) {
+      ctx.fillStyle = col;
+      ctx.fillText(t, cx0, ty);
+      ty += lh;
+    }
+    ctx.restore();
+  }
+
   function draw() {
     // resize() paints once before newRound() has built any state — bail out
     // safely until snake/food exist (otherwise this throws and aborts start).
@@ -177,16 +310,6 @@ export function createSnakeGame(rootEl) {
     g.addColorStop(1, '#100309');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, vw, vh);
-
-    // Very faint grid so the play area reads without being busy.
-    ctx.strokeStyle = 'rgba(255, 180, 120, 0.05)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= COLS; i++) {
-      ctx.beginPath(); ctx.moveTo(ox + i * cell, oy); ctx.lineTo(ox + i * cell, oy + ROWS * cell); ctx.stroke();
-    }
-    for (let j = 0; j <= ROWS; j++) {
-      ctx.beginPath(); ctx.moveTo(ox, oy + j * cell); ctx.lineTo(ox + COLS * cell, oy + j * cell); ctx.stroke();
-    }
 
     // Eat-pops: expanding fading rings.
     for (let i = pops.length - 1; i >= 0; i--) {
@@ -213,47 +336,76 @@ export function createSnakeGame(rootEl) {
     ctx.rotate((now / 1600) % (Math.PI * 2));
     ctx.shadowColor = 'rgba(255, 213, 74, 0.95)';
     ctx.shadowBlur = 18;
-    ctx.fillStyle = '#FFE45C';
-    starPath(0, 0, cell * 0.46 * pulse, cell * 0.2 * pulse);
-    ctx.fill();
+    softStar(0, 0, cell * 0.46 * pulse, '#FFE45C');
     ctx.restore();
 
-    // The snake: one smooth glowing tube (stroked polyline) + a brighter
-    // core for a rounded look, then a friendly face on the head.
+    // The snake: a soft neon bloom, a warm head→tail gradient body, a
+    // glossy core ridge, a rounded tail, and a painted, cute face.
     if (snake.length) {
+      const pts = snake.map((s) => [cx(s.x), cy(s.y)]);
+      const trace = () => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      };
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(cx(snake[0].x), cy(snake[0].y));
-      for (let i = 1; i < snake.length; i++) ctx.lineTo(cx(snake[i].x), cy(snake[i].y));
-      // Outer glow + body.
-      ctx.shadowColor = 'rgba(255, 140, 66, 0.85)';
-      ctx.shadowBlur = 16;
-      ctx.strokeStyle = '#FF8C42';
-      ctx.lineWidth = cell * 0.78;
-      ctx.stroke();
-      // Brighter inner core (no shadow) for a glossy tube feel.
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = '#FFC487';
-      ctx.lineWidth = cell * 0.34;
+
+      // Soft ambient bloom so the snake glows into the dark board.
+      trace();
+      ctx.shadowColor = 'rgba(255, 150, 80, 0.9)';
+      ctx.shadowBlur = 26;
+      ctx.strokeStyle = 'rgba(255, 138, 64, 0.30)';
+      ctx.lineWidth = cell * 1.12;
       ctx.stroke();
 
-      // Head: a rounded cap with big eyes looking the way we travel.
-      const hx = cx(snake[0].x), hy = cy(snake[0].y);
+      // Body: warm head→tail gradient for a painted, dimensional look.
+      const h0 = pts[0], t0 = pts[pts.length - 1];
+      let body = '#FF8C42';
+      if (h0[0] !== t0[0] || h0[1] !== t0[1]) {
+        body = ctx.createLinearGradient(h0[0], h0[1], t0[0], t0[1]);
+        body.addColorStop(0, '#FF9D4D');
+        body.addColorStop(1, '#E9701C');
+      }
+      trace();
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = body;
+      ctx.lineWidth = cell * 0.8;
+      ctx.stroke();
+
+      // Glossy core highlight (no shadow) — a slim warm-white ridge.
+      trace();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255, 226, 188, 0.85)';
+      ctx.lineWidth = cell * 0.26;
+      ctx.stroke();
+
+      // Rounded tail nub so the body ends softly, not abruptly.
+      ctx.fillStyle = '#E9701C';
+      ctx.beginPath(); ctx.arc(t0[0], t0[1], cell * 0.22, 0, Math.PI * 2); ctx.fill();
+
+      // Head: a rounded cap with a soft top-left sheen + big cute eyes.
+      const hx = h0[0], hy = h0[1];
       ctx.fillStyle = '#FF7A1F';
-      ctx.beginPath(); ctx.arc(hx, hy, cell * 0.46, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy, cell * 0.47, 0, Math.PI * 2); ctx.fill();
+      const sheen = ctx.createRadialGradient(hx - cell * 0.18, hy - cell * 0.18, 0, hx, hy, cell * 0.5);
+      sheen.addColorStop(0, 'rgba(255, 224, 184, 0.55)');
+      sheen.addColorStop(1, 'rgba(255, 224, 184, 0)');
+      ctx.fillStyle = sheen;
+      ctx.beginPath(); ctx.arc(hx, hy, cell * 0.47, 0, Math.PI * 2); ctx.fill();
       const fwx = (phase === 'play' ? dir.x : nextDir.x);
       const fwy = (phase === 'play' ? dir.y : nextDir.y);
-      const eo = cell * 0.18;                 // eye spread
+      const eo = cell * 0.19;                 // eye spread
       for (const sgn of [-1, 1]) {
         const exx = hx + (-fwy) * eo * sgn + fwx * cell * 0.1;
         const eyy = hy + (fwx) * eo * sgn + fwy * cell * 0.1;
         ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(exx, eyy, cell * 0.15, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(exx, eyy, cell * 0.16, 0, Math.PI * 2); ctx.fill();
+        const px = exx + fwx * cell * 0.06, py = eyy + fwy * cell * 0.06;
         ctx.fillStyle = '#241225';
-        ctx.beginPath();
-        ctx.arc(exx + fwx * cell * 0.06, eyy + fwy * cell * 0.06, cell * 0.07, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, cell * 0.08, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';   // catch-light
+        ctx.beginPath(); ctx.arc(px - cell * 0.03, py - cell * 0.03, cell * 0.025, 0, Math.PI * 2); ctx.fill();
       }
       // Occasional tongue flick while playing.
       if (phase === 'play' && ((now / 240 | 0) % 3 === 0)) {
@@ -261,28 +413,29 @@ export function createSnakeGame(rootEl) {
         ctx.lineWidth = Math.max(2, cell * 0.06);
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(hx + fwx * cell * 0.46, hy + fwy * cell * 0.46);
-        ctx.lineTo(hx + fwx * cell * 0.74, hy + fwy * cell * 0.74);
+        ctx.moveTo(hx + fwx * cell * 0.47, hy + fwy * cell * 0.47);
+        ctx.lineTo(hx + fwx * cell * 0.76, hy + fwy * cell * 0.76);
         ctx.stroke();
       }
     }
 
-    // HUD: a little star + score, top-left, glowing softly.
+    // HUD: score + a little star, top-RIGHT — the top-left corner is the
+    // Back button, so the count used to sit on top of it.
+    const hudY = oy + 26;
+    const hudX = ox + COLS * cell - 22;     // inner right margin of the board
     ctx.save();
     ctx.shadowColor = 'rgba(255, 213, 74, 0.7)';
     ctx.shadowBlur = 8;
-    ctx.fillStyle = '#FFE45C';
-    starPath(ox + 24, oy + 26, 9, 4);
-    ctx.fill();
+    softStar(hudX, hudY, 9, '#FFE45C');
     ctx.restore();
     ctx.fillStyle = '#FFF1DC';
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.font = '700 18px Quicksand, sans-serif';
-    ctx.fillText(String(score), ox + 40, oy + 27);
+    ctx.fillText(String(score), hudX - 16, hudY + 1);
 
     // Start / Game-Over screens.
-    if (phase !== 'play') {
+    if (phase === 'start' || phase === 'over') {
       ctx.fillStyle = 'rgba(10, 3, 8, 0.6)';
       ctx.fillRect(0, 0, vw, vh);
       ctx.textAlign = 'center';
@@ -315,6 +468,8 @@ export function createSnakeGame(rootEl) {
                          : 'Press any key · tap · swipe to start',
         midX, vh * 0.64
       );
+    } else if (phase === 'credits') {
+      drawCredits(now);
     }
   }
 
@@ -327,7 +482,7 @@ export function createSnakeGame(rootEl) {
       acc += ts - last;
       last = ts;
       let guard = 0;
-      while (acc >= TICK_MS && guard++ < 5) { step(); acc -= TICK_MS; }
+      while (acc >= TICK_MS && phase === 'play' && guard++ < 5) { step(); acc -= TICK_MS; }
     }
     draw();
   }
