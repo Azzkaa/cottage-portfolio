@@ -9,7 +9,7 @@ metadata:
 
 ## Goal
 
-An interactive 3D scene that serves as a portfolio website. A stylized juice-carton shop sits on a cream-colored ground in a magical neon-cottagecore night atmosphere. A vertical white "straw" signpost with 4 colored arrow plaques (Projects, About, Articles, Credits) stands beside the carton. Hovering a plaque highlights it; clicking one flies the camera (two-phase tween) to a spot on the shop and opens a themed HTML overlay panel with portfolio content. Author: Azka Aftab.
+An interactive 3D scene that serves as a portfolio website. A stylized juice-carton shop sits on a cream-colored ground in a magical neon-cottagecore night atmosphere. A vertical white "straw" signpost with 4 colored arrow plaques (Projects, About, Articles, Credits) stands beside the carton. Hovering a plaque highlights it; clicking one either flies the camera (two-phase tween) to a spot on the shop and opens a themed HTML overlay panel (**Projects**, **About**), opens an external link in a new tab (**Articles**), or flies + zooms into a star and launches a full-bleed Snake mini-game (**Credits**). Author: Azka Aftab.
 
 ## Tech Stack
 
@@ -24,6 +24,7 @@ An interactive 3D scene that serves as a portfolio website. A stylized juice-car
   - `CanvasTexture` for the floor name text, plaque labels, and the About box label
   - Custom camera fly tween (`flyCamera`) — two-phase fly + dive per plaque, `flyHome()` to return
 - **HTML overlay panels** (DOM over the canvas), styled in `src/style.css`, "Quicksand" web font
+- **Snake mini-game** — self-contained 2D `<canvas>` module `src/snake.js` (`createSnakeGame(rootEl) -> { start, stop }`), imported by `main.js` and shown in the full-bleed Credits panel
 
 ## Aesthetic
 
@@ -54,10 +55,12 @@ Neon cottagecore at night. Inspired by Jesse Zhou's ramen-shop portfolio + the v
 - OrbitControls with damping
 - 4 clickable arrow plaques on a vertical straw signpost: **Projects**, **About**, **Articles**, **Credits**
 - Plaque hover highlight (contrast color) + click → camera fly + HTML overlay panel
-- **About** panel: dark wine-glass theme, tabs (About / Quick Facts / Experience); camera dives to the rear base box where `public/about-label.jpg` is stuck as a rounded sticker
-- **Projects** panel: white/orange whimsical theme, scrolling project list; camera flies to the hanging menu
-- Cute white CSS mascots peek on the panels
-- **Articles** + **Credits** plaques: not yet wired (only Projects + About have flows)
+- **About** panel: dark wine-glass theme, tabs (About / Quick Facts / Experience); camera dives to the rear base box where `public/about-label.jpg` is stuck as a rounded sticker — placement is **absolute world coords baked from live tuning** (the old `aboutCamTarget`-relative math was unreliable)
+- **Projects** panel: white/orange whimsical theme, scrolling project list; camera flies to the hanging menu — `projectsCamPos`/`projectsCamTarget` are **baked absolute world coords**
+- **Articles**: no camera flow / panel — clicking opens the articles Google Drive link in a new tab (`noopener,noreferrer`)
+- **Credits**: camera flies up to a top-of-carton view + zooms hard into a star, then opens a full-bleed dark **Star Snake** mini-game (`src/snake.js`) — glowing orange snake eats a yellow star; keyboard/WASD + swipe + on-screen D-pad; Start / Game-Over screens
+- Cute white CSS mascots peek on the About/Projects panels
+- All overlay panels are hidden pre-load via a critical inline `<style>` in `index.html` (no flash-of-panel); focus is dropped before setting `aria-hidden` on close (a11y)
 - Neon lighting + bloom post-processing
 - Firefly particle system
 - Sky gradient background
@@ -88,7 +91,8 @@ Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`. Panels curr
 
 - About panel → About tab (bio), Quick Facts tab, Experience tab (education + work history)
 - Projects panel → Email AI Auto-Reply, Student Portal SKSU, Fault Detection for Substations
-- Articles / Credits: plaques exist but no panel/flow yet
+- Articles → opens an external Google Drive link (no panel/text content to edit)
+- Credits → Snake mini-game (no text content; tune feel/visuals in `src/snake.js`)
 
 ## Git Branches
 
@@ -100,7 +104,9 @@ Reuse from existing portfolio at `https://azka-aftab-25.vercel.app`. Panels curr
 The following are exposed to `window` for live position/scale/rotation experimentation:
 `signpostGroup`, `signMeshes`, `controls`, `camera`, `ground`, `scene`, `nameText`,
 `aboutLabel`, `HOVER_COLOR`, `aboutCamPos`, `aboutCamTarget`, `aboutDiveLerp`,
-`projectsCamPos`, `projectsCamTarget`, `flyHome()`
+`projectsCamPos`, `projectsCamTarget`, `creditsCamPos`, `creditsCamTarget`, `flyHome()`
+
+> `creditsCamPos`/`creditsCamTarget` are still **starting guesses** — not yet tuned onto the actual circled star.
 
 Workflow: type commands in browser console (e.g. `signpostGroup.position.x = -0.5`), see changes live, then ask the assistant to hardcode final values.
 
@@ -113,3 +119,5 @@ Workflow: type commands in browser console (e.g. `signpostGroup.position.x = -0.
 5. **Stylized > photoreal.** The juice carton's painted illustration look is the strength. Avoid aggressive material overrides; enhance with lighting + post-processing instead.
 6. **Expose to console for live tuning.** When positioning a new 3D object, expose it to window so you can adjust in DevTools, then bake final values into code.
 7. **JavaScript temporal dead zone gotcha.** `let`/`const` variables exist before their declaration line but throw ReferenceError if used. Declare arrays before using them in callbacks.
+8. **Bake absolute world coords, not `modelSize` coefficients.** Deriving 3D placements as fractions of `modelCenter`/`modelSize` proved unreliable (flung the About label to x≈-6). Tune live via console, then hardcode the readback as plain absolute `Vector3` literals.
+9. **Self-contained DOM games/widgets get their own module.** e.g. `src/snake.js` — `main.js` only imports it and calls `start()`/`stop()` from the panel open/close. Size canvases from a stable parent element's `clientWidth/Height`, never the full-screen `#*-panel` root (it's `position:fixed; inset:0` → whole viewport).

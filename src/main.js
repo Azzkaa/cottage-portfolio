@@ -10,6 +10,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 // Bloom pass — makes bright/emissive pixels glow (the neon look).
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+// Self-contained Snake mini-game shown inside the Credits panel.
+import { createSnakeGame } from './snake.js';
 
 // The scene is the root container holding every 3D object, light and camera.
 const scene = new THREE.Scene();
@@ -770,6 +772,39 @@ if (_pPanel) {
   _pPanel.querySelector('.panel-back').addEventListener('click', closeProjectsPanel);
 }
 
+// ===== Credits panel (Snake mini-game) =====
+const _cPanel = document.getElementById('credits-panel');
+let _snake = null; // game instance, built lazily on first open
+
+// Open the Credits panel and (re)start a fresh Snake round.
+function openCreditsPanel() {
+  if (!_cPanel) return;
+  _panelOpen = true;
+  _cPanel.classList.add('open');
+  _cPanel.setAttribute('aria-hidden', 'false');
+  // Build the game once (bound to the panel), then start a clean round.
+  if (!_snake) _snake = createSnakeGame(_cPanel);
+  _snake.start();
+}
+
+// Close the Credits panel, stop the game, and fly the camera home.
+function closeCreditsPanel() {
+  if (!_cPanel || !_cPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  if (_snake) _snake.stop(); // kills the RAF loop + input listeners
+  _cPanel.classList.remove('open');
+  // Drop focus out of the panel before hiding it: the browser blocks
+  // aria-hidden on an ancestor of the focused element (the Back button).
+  if (_cPanel.contains(document.activeElement)) document.activeElement.blur();
+  _cPanel.setAttribute('aria-hidden', 'true');
+  if (window.flyHome) window.flyHome();
+}
+
+// Wire the Credits panel's Back button.
+if (_cPanel) {
+  _cPanel.querySelector('.panel-back').addEventListener('click', closeCreditsPanel);
+}
+
 // ===== Plaque hover + click (raycaster) =====
 // A raycaster shoots a ray from the camera through the cursor into the scene.
 const _raycaster = new THREE.Raycaster();
@@ -867,25 +902,22 @@ renderer.domElement.addEventListener('click', (event) => {
     );
   }
   if (p.name === 'sign-credits') {
-    // Same two-phase pattern as Projects, but flying up to a top-of-carton
-    // view then diving into a star. No panel yet, so re-enable controls when
-    // the dive finishes (otherwise the user is stuck on the star).
+    // Same two-phase pattern as Projects: fly up to a top-of-carton view,
+    // dive into the star, then open the Credits panel (the Snake game).
+    // Controls stay locked until the panel's Back button flies home.
     controls.enabled = false;
     controls.autoRotate = false;
     if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
     renderer.domElement.style.cursor = 'default';
     // Phase 1: pan up to the wide top-of-carton view.
     flyCamera(window.creditsCamPos, window.creditsCamTarget, 1500, () => {
-      // Phase 2: zoom hard into the star, then hand control back to the user.
+      // Phase 2: zoom hard into the star, then reveal the Snake panel.
       // 0.93 = camera ends 93% of the way to the star (near-max without
       // landing inside it). Bump toward 1.0 for even closer.
       const innerPos = new THREE.Vector3().lerpVectors(
         window.creditsCamPos, window.creditsCamTarget, 0.93
       );
-      flyCamera(innerPos, window.creditsCamTarget, 800, () => {
-        controls.enabled = true;
-        controls.autoRotate = true;
-      });
+      flyCamera(innerPos, window.creditsCamTarget, 800, openCreditsPanel);
     });
   }
 });
