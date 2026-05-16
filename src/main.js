@@ -102,6 +102,10 @@ loader.load(
     // Signpost Group
     const signpostGroup = new THREE.Group();
     scene.add(signpostGroup);
+    // Set transform early so the straw length can be computed against the
+    // ground in this group's local space.
+    signpostGroup.scale.set(0.6, 0.6, 0.6);
+    signpostGroup.position.set(-1.6, 0, 0.8);
 
     const _mBox = new THREE.Box3().setFromObject(model);
     const _mCenter = new THREE.Vector3(); _mBox.getCenter(_mCenter);
@@ -178,6 +182,9 @@ scene.add(ground);
       const nameTextGeometry = new THREE.PlaneGeometry(4, 2);
       const nameTextMaterial = new THREE.MeshStandardMaterial({
         map: nameTexture,
+        emissive: 0xffffff,
+        emissiveMap: nameTexture,
+        emissiveIntensity: 2.0,
         transparent: true,
         roughness: 0.9,
         metalness: 0,
@@ -188,7 +195,7 @@ scene.add(ground);
       // Lay flat on the ground, slightly above it to avoid z-fighting
       // Lay flat on the ground, rotate around X axis only
 nameText.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
-      nameText.position.set(_mCenter.x - 2.5, ground.position.y + 0.01, _mCenter.z - 3);
+      nameText.position.set(_mCenter.x + 2.6, ground.position.y + 0.02, _mCenter.z - 1.5);
 nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
 
       scene.add(nameText);
@@ -199,8 +206,15 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
     // Straw should be only as tall as needed to hold the 4 plaques + small margins
     const _strawTopMargin = 0.15;
     const _strawBottomMargin = 0.15;
-    const _strawLength = (4 - 1) * 0.42 + _strawTopMargin + _strawBottomMargin + 0.32; // 3 gaps + top/bottom margin + 1 plaque height
-    const _strawCenterY = _mCenter.y; // center it vertically on the carton
+    const _plaqueStack = (4 - 1) * 0.42 + _strawTopMargin + _strawBottomMargin + 0.32; // 3 gaps + top/bottom margin + 1 plaque height
+    const _strawCenterY = _mCenter.y; // vertical center of the plaque stack on the carton
+
+    // Keep the top of the straw exactly where it was, but extend the bottom
+    // down until it reaches (and slightly sinks into) the ground.
+    const _strawTopLocalY = _strawCenterY + _plaqueStack / 2; // unchanged top
+    const _groundLocalY = (ground.position.y - signpostGroup.position.y) / signpostGroup.scale.y - 0.1; // ground in group-local space, sunk a touch
+    const _strawLength = _strawTopLocalY - _groundLocalY;
+    const _poleCenterY = (_strawTopLocalY + _groundLocalY) / 2;
 
     const _pole = new THREE.Mesh(
       new THREE.CylinderGeometry(0.05, 0.05, _strawLength, 16),
@@ -212,7 +226,7 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
         metalness: 0.1
       })
     );
-    _pole.position.set(_spX, _strawCenterY, _spZ);
+    _pole.position.set(_spX, _poleCenterY, _spZ);
     signpostGroup.add(_pole);
 
     function _makeArrow(w, h) {
@@ -230,26 +244,58 @@ nameText.scale.set(0.7, 0.7, 0.7); // shrink text and move further back-left
       { name: 'sign-contact',    label: 'CONTACT',    color: '#7DC85B' }, // green
     ];
     const _pW = 0.9, _pH = 0.32, _pD = 0.06, _vSpace = 0.42;
-    const _topY = _strawCenterY + (_strawLength / 2) - _strawTopMargin - 0.16; // top plaque just below the straw's top
+    const _topY = _strawCenterY + (_plaqueStack / 2) - _strawTopMargin - 0.16; // top plaque just below the straw's top
 
     _sCfg.forEach((cfg, i) => {
       const geo = new THREE.ExtrudeGeometry(_makeArrow(_pW, _pH), { depth: _pD, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.01, bevelSegments: 2 });
       geo.center();
-      const mat = new THREE.MeshStandardMaterial({ color: cfg.color, emissive: new THREE.Color(cfg.color), emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.1 });
+      const mat = new THREE.MeshStandardMaterial({ color: cfg.color, emissive: new THREE.Color(cfg.color), emissiveIntensity: 1.6, roughness: 0.3, metalness: 0.1 });
       const m = new THREE.Mesh(geo, mat);
       m.name = cfg.name;
       m.userData.isInteractive = true;
-      m.position.set(_spX - 0.05, _topY - i * _vSpace, _spZ);
-      m.rotation.y = Math.PI / 2; // rotate plaque to face left, flush with straw
+      // Stagger each plaque left/right (toward the side its arrow points) so the
+      // stack zigzags into an X-ish criss-cross instead of a straight column.
+      const _zig = (i % 2 === 0) ? 0.35 : -0.35;
+      m.position.set(_spX + 0.05, _topY - i * _vSpace, _spZ + _zig);
+      // Point each arrow outward — away from the pole, matching its stagger side.
+      m.rotation.y = (i % 2 === 0) ? Math.PI / 2 : -Math.PI / 2;
+
+      // Label text drawn to a canvas, placed on the plaque's camera-facing face.
+      const _lc = document.createElement('canvas');
+      _lc.width = 640; _lc.height = 192;
+      const _lx = _lc.getContext('2d');
+      _lx.clearRect(0, 0, _lc.width, _lc.height);
+      _lx.fillStyle = '#2A0A1E'; // dark wine — reads against the bright neon plaque
+      _lx.textAlign = 'center';
+      _lx.textBaseline = 'middle';
+      // Start big, then shrink to fit so long words (EXPERIENCE) don't clip.
+      let _fs = 112;
+      const _maxLblW = _lc.width * 0.84;
+      do {
+        _lx.font = `bold ${_fs}px "Arial", sans-serif`;
+        _fs -= 4;
+      } while (_lx.measureText(cfg.label).width > _maxLblW && _fs > 28);
+      _lx.fillText(cfg.label, _lc.width / 2, _lc.height / 2);
+      const _lblTex = new THREE.CanvasTexture(_lc);
+      _lblTex.colorSpace = THREE.SRGBColorSpace;
+      const _lbl = new THREE.Mesh(
+        new THREE.PlaneGeometry(_pW * 0.74, _pH * 0.74),
+        new THREE.MeshStandardMaterial({
+          map: _lblTex, emissive: 0xffffff, emissiveMap: _lblTex, emissiveIntensity: 0.5,
+          transparent: true, alphaTest: 0.01, roughness: 0.6, metalness: 0,
+        })
+      );
+      const _zoff = _pD / 2 + 0.02;
+      if (i % 2 === 0) { _lbl.position.set(0, 0, _zoff); }
+      else { _lbl.position.set(0, 0, -_zoff); _lbl.rotation.y = Math.PI; }
+      m.add(_lbl);
+
       signpostGroup.add(m);
       console.log('Plaque created:', cfg.name, 'at y =', (_topY - i * _vSpace).toFixed(2));
       signMeshes.push(m);
     });
 
     console.log('Signpost created. signMeshes:', signMeshes.length);
-    // Hardcode signpost scale and position
-    signpostGroup.scale.set(0.5, 0.5, 0.5);
-    signpostGroup.position.set(-0.5, 0, 0.8);
 
     // Expose signpost and controls to console for live tweaking
     window.signpostGroup = signpostGroup;
