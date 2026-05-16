@@ -198,13 +198,19 @@ loader.load(
       ctx.letterSpacing = '8px';
       ctx.fillText('AZKA AFTAB', canvas.width / 2, 160);
 
-      // Subtitles: smaller cream monospace, left-aligned.
+      // Subtitles: smaller cream monospace, left-aligned as a block.
+      // Reset letterSpacing first — the 8px above is for the big name only;
+      // left on, it widened these lines until "DEVELOPER" ran off-canvas.
       ctx.fillStyle = '#F2F2F0';
-      ctx.font = 'bold 56px "Courier New", monospace';
+      ctx.font = 'bold 52px "Courier New", monospace';
+      ctx.letterSpacing = '0px';
       ctx.textAlign = 'left';
-      const subX = canvas.width / 2 - 280;
-      ctx.fillText('> FULL STACK DEVELOPER', subX, 280);
-      ctx.fillText('> RESEARCHER', subX, 360);
+      const sub1 = '> FULL STACK DEVELOPER';
+      const sub2 = '> RESEARCHER';
+      const subMaxW = Math.max(ctx.measureText(sub1).width, ctx.measureText(sub2).width);
+      const subX = (canvas.width - subMaxW) / 2; // block-centred, fully on-canvas
+      ctx.fillText(sub1, subX, 280);
+      ctx.fillText(sub2, subX, 360);
 
       // Wrap the canvas as a Three.js texture and return it.
       const texture = new THREE.CanvasTexture(canvas);
@@ -239,6 +245,38 @@ loader.load(
 
     // Exposed to the browser console for live position tweaking.
     window.nameText = nameText;
+
+    // ===== Cute rabbit prop on the ground, in front of the name text =====
+    // Loaded after the shop so we can place it relative to nameText/ground.
+    loader.load(
+      '/models/cute_rabbit.glb',
+      (rgltf) => {
+        const rabbit = rgltf.scene;
+        rabbit.traverse((o) => {
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+        });
+        scene.add(rabbit);
+        // Normalise to a small ~0.45-unit-tall prop regardless of the
+        // file's native scale (measure → scale → re-measure to sit on floor).
+        rabbit.updateMatrixWorld(true);
+        const _rSize = new THREE.Vector3();
+        new THREE.Box3().setFromObject(rabbit).getSize(_rSize);
+        rabbit.scale.setScalar(0.45 / (_rSize.y || 1));
+        rabbit.updateMatrixWorld(true);
+        const _rBox = new THREE.Box3().setFromObject(rabbit);
+        // Starting guess: just in front of the AZKA AFTAB text, on the
+        // ground. Tune live via window.rabbit, then bake the values here.
+        rabbit.position.set(
+          nameText.position.x - 1.0,               // above the AZKA AFTAB text (-X = back)
+          ground.position.y - _rBox.min.y + 0.001, // bottom flush with floor
+          nameText.position.z
+        );
+        rabbit.rotation.y = Math.PI / 2; // face back toward the viewer
+        window.rabbit = rabbit;
+      },
+      undefined,
+      (err) => console.error('cute_rabbit.glb failed to load:', err)
+    );
 
     // ===== Signpost straw (pole) =====
     // Small margins above/below the plaque stack on the pole.
