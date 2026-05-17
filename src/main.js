@@ -1687,6 +1687,38 @@ const _actx = _AC ? new _AC() : null;
 function _resumeAudio() {
   if (_actx && _actx.state === 'suspended') _actx.resume().catch(() => {});
 }
+
+// iOS Safari silences a Web-Audio-ONLY page with the hardware mute
+// switch (it uses the "ambient" audio session). Playing ANY HTMLMedia
+// element once flips Safari to the "playback" session, after which Web
+// Audio (our bgm + SFX) is audible even on silent. Removing all <audio>
+// in the .mpeg fix is what killed sound on phones. So keep a tiny
+// SILENT looping WAV — built in code (Blob), so there's no file / MIME
+// / codec dependency — and play it on the first user gesture.
+function _silentWavUrl() {
+  const sr = 8000, n = sr;                  // ~1s of 8-bit mono silence
+  const b = new ArrayBuffer(44 + n);
+  const dv = new DataView(b);
+  const W = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  W(0, 'RIFF'); dv.setUint32(4, 36 + n, true); W(8, 'WAVE');
+  W(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true); dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true);
+  W(36, 'data'); dv.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) dv.setUint8(44 + i, 128); // 8-bit silence
+  return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+}
+let _silent = null;
+function _unlockAudio() {
+  _resumeAudio();
+  try {
+    if (!_silent) { _silent = new Audio(_silentWavUrl()); _silent.loop = true; }
+    _silent.play().catch(() => {});
+  } catch (_) {}
+}
+// Belt-and-suspenders: the very first interaction anywhere unlocks too.
+window.addEventListener('pointerdown', _unlockAudio, { once: true });
+window.addEventListener('touchend', _unlockAudio, { once: true });
 // Decode a clip once; `.buf` fills in when ready. onReady (optional)
 // fires after decode — used so bgm can start the instant it's decoded
 // if START was already pressed.
@@ -1774,7 +1806,7 @@ function _startBgm() {
 // where the Web Audio context is unlocked and the looping music starts.
 if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
-    _resumeAudio();              // unlock the Web Audio context
+    _unlockAudio();              // resume ctx + flip iOS to playback session
     _playStartSfx();             // one-shot chime
     _startBgm();                 // looping music (defers if still decoding)
     if (_introEl) {
