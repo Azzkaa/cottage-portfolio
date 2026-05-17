@@ -1040,7 +1040,8 @@ function closeAboutPanel() {
 
 // Wire the Back button and the tab buttons.
 if (_panel) {
-  _panel.querySelector('.panel-back').addEventListener('click', closeAboutPanel);
+  _panel.querySelectorAll('.panel-back, .panel-close')
+    .forEach((b) => b.addEventListener('click', closeAboutPanel));
   _panel.querySelectorAll('.panel-tabs button').forEach((btn) => {
     btn.addEventListener('click', () => _setPanelView(btn.dataset.view));
   });
@@ -1071,7 +1072,8 @@ function closeProjectsPanel() {
 
 // Wire the Projects panel's Back button.
 if (_pPanel) {
-  _pPanel.querySelector('.panel-back').addEventListener('click', closeProjectsPanel);
+  _pPanel.querySelectorAll('.panel-back, .panel-close')
+    .forEach((b) => b.addEventListener('click', closeProjectsPanel));
 }
 
 // ===== Credits panel (Snake mini-game) =====
@@ -1130,7 +1132,8 @@ function closeContactPanel() {
 
 // Wire the Contact panel's Back button.
 if (_ctPanel) {
-  _ctPanel.querySelector('.panel-back').addEventListener('click', closeContactPanel);
+  _ctPanel.querySelectorAll('.panel-back, .panel-close')
+    .forEach((b) => b.addEventListener('click', closeContactPanel));
 }
 
 // ===== Darts panel (full-bleed mini-game, opened by the round medallion) =====
