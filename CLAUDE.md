@@ -31,8 +31,13 @@ Beyond the plaques, much of the scene is now interactive:
   camera flow as the ABOUT ME plaque — shared `_flyToAbout()`).
 - The **round medallion** above the hanging menu opens a **Darts** mini-game.
 - Clicking **any star** opens the **Carrot Blaster** mini-game.
-- Stars, the dart medallion, and the ground rabbit **glow on hover**; the
-  rabbit also has a resting glow and spawns a **firefly swarm** on hover.
+- Clicking the **ground rabbit** opens the **Bunny Hop** pixel-art endless
+  runner.
+- Stars, the dart medallion, and the ground rabbit **glow on hover** (plus a
+  soft hover tick sound); the rabbit also has a resting glow and spawns a
+  **firefly swarm** on hover.
+- A soft **click sound** plays on every actionable DOM button/link and 3D
+  scene action (the START button keeps its own chime).
 
 ## Tech Stack
 
@@ -50,6 +55,13 @@ Beyond the plaques, much of the scene is now interactive:
   - `src/snake.js` — Star Snake (Credits panel)
   - `src/darts.js` — Darts (opened by the round medallion)
   - `src/shooter.js` — Carrot Blaster (opened by clicking any star)
+  - `src/runner.js` — Bunny Hop (pixel-art runner, opened by the ground rabbit)
+- **Audio** (`HTMLAudioElement`, wired in `main.js`): looping background music
+  (`/backgr0und.mpeg`, vol 0.06, starts 1s after START), START chime
+  (`/start.mpeg`), soft hover tick (`/butt0n_1.mpeg`, vol 0.03, 80ms throttle),
+  generic click (`/CIick.mpeg`, vol 0.4, 60ms dedupe) on every DOM button/link
+  + 3D action. Files are `.mpeg`; if one is silent the dev server's MIME is the
+  cause → rename to `.mp3` and update the path.
 
 ## Aesthetic
 
@@ -94,6 +106,7 @@ _Tangled_'s lantern scene. Soft / rounded / warm over sharp / harsh.
 | Star Snake | `src/snake.js` | CREDITS plaque (fly into a star) | `#credits-panel.panel--game` |
 | Darts | `src/darts.js` | round medallion (`dartTarget`) | `#darts-panel.panel--game` |
 | Carrot Blaster | `src/shooter.js` | clicking **any star** | `#shooter-panel.panel--game` |
+| Bunny Hop | `src/runner.js` | clicking the **ground rabbit** | `#runner-panel.panel--game` |
 
 - All three follow the same pattern: full-bleed `.X-frame`/`.X-canvas`,
   Start/Game-Over drawn on the canvas, Quicksand font, dpr-aware resize from the
@@ -105,6 +118,11 @@ _Tangled_'s lantern scene. Soft / rounded / warm over sharp / harsh.
 - **Carrot Blaster**: kawaii rabbit slides (←→ / A D / mouse), fires carrots
   (space / tap / click) at falling stars that pop; 3 lives; soft rounded star,
   cute bunny face, fat carrot. `window.openShooterPanel()`.
+- **Bunny Hop**: Chrome-Dino-style **pixel-art** runner — a static side-view
+  bunny sprite hops carrot plants over a sunny pastel meadow; space/tap to
+  hop, gentle speed ramp (`SPEED_RAMP = 0.55`). Hand-authored sprite grids +
+  palettes at the top of the file; one `U` unit scales the whole scene
+  (smaller = cuter). `window.openRunnerPanel()`.
 
 ## Panels & Content
 
@@ -138,10 +156,14 @@ gone):
   callback calls `_introReady()` (it repurposed the old dead `#loader` stub) →
   swaps loader for **START**.
 - Controls are **locked** (`controls.enabled = false`, no auto-rotate) until
-  START. START fades the overlay, jumps the camera to `_introStartPos`
-  (`modelCenter + (-camDistance*1.4, +0.95, -1.15)`), then `flyCamera` to the
-  opening pose over 2600ms; `_beginAfterIntro()` re-enables controls and starts
-  auto-rotate 4s later (the old idle behaviour, deferred until after the intro).
+  START. START plays the chime, fades the overlay, jumps the camera to
+  `_introStartPos` (`modelCenter + (-camDistance*1.4, +0.95, -1.15)`), then
+  `flyCamera` to the opening pose over 2600ms; the looping bgm starts 1s
+  later; `_beginAfterIntro()` re-enables controls and starts auto-rotate 4s
+  later (the old idle behaviour, deferred until after the intro).
+- **Zoom-out is capped**: `controls.maxDistance` = opening orbit radius ×1.18
+  so the 40×40 ground's edge can't be reached by free orbiting (scripted
+  camera flies skip `controls.update()`, so they're unaffected).
 
 ## Glow / hover effects
 
@@ -163,7 +185,7 @@ gone):
 `aboutCamTarget`, `aboutDiveLerp`, `projectsCamPos`, `projectsCamTarget`,
 `creditsCamPos`, `creditsCamTarget`, `flyHome()`, `floorLines[]`, `dartTarget`,
 `dartGlow`, `starGlows`, `STAR_GLOW`, `DART_GLOW`, `RABBIT_HOVER`,
-`openDartsPanel()`, `openShooterPanel()`
+`openDartsPanel()`, `openShooterPanel()`, `openRunnerPanel()`
 
 > **Still starting guesses — not yet baked:** `floorLines[i].position` (the 3
 > clickable floor lines), `dartTarget.position`/`.scale` (medallion hotspot;
@@ -177,7 +199,11 @@ readback as plain absolute literals.
 
 `public/azka.jpg` (portrait), `public/Azka_Resume_18_1.pdf` (résumé),
 `public/{SKSU,backend,fyp22,hands,n8n,penguins,sp,vue-taskmanager}.png`
-(project screenshots). The original `WhatsApp Image ….jpg` is left untracked
+(project screenshots), and audio
+`public/{backgr0und,start,butt0n_1,CIick}.mpeg` (bgm / START chime / hover
+tick / click — note the leetspeak filenames, referenced verbatim in code).
+`public/favicon.svg` is now a soft pastel bunny; the tab title is
+**"Azka's Portfolio"**. The original `WhatsApp Image ….jpg` is left untracked
 (redundant — `azka.jpg` is the used copy).
 
 ## Git Branches
@@ -190,7 +216,8 @@ readback as plain absolute literals.
 ## Scope (v1) – Out of Scope
 
 - Custom Blender modeling, `.ktx2` compression, complex new shaders
-- Audio (ambient/click/chime + mute) — planned for later polish, not yet added
+- Audio is now **in** (bgm + START / hover / click sfx). A user-facing
+  **mute toggle** is still out of scope / future polish.
 
 ## Working Principles
 

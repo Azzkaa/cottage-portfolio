@@ -16,6 +16,8 @@ import { createSnakeGame } from './snake.js';
 import { createDartsGame } from './darts.js';
 // Self-contained "Carrot Blaster" shooter — opened by clicking a star.
 import { createShooterGame } from './shooter.js';
+// Self-contained "Bunny Hop" runner — opened by clicking the ground rabbit.
+import { createRunnerGame } from './runner.js';
 
 // Baked world position + radius of the round medallion's click-target,
 // derived from live console clicks on the medallion. To re-tune: nudge
@@ -626,6 +628,11 @@ loader.load(
     camera.lookAt(modelCenter);          // aim the camera at the model
     controls.target.copy(modelCenter);   // orbit around the model centre
     controls.update();                   // apply the changes
+    // Cap how far the user can dolly out so the 40×40 ground's edge never
+    // comes into view (relative to the opening orbit radius; only constrains
+    // free orbiting — scripted camera flies bypass controls.update()).
+    // Tunable live via controls.maxDistance, then re-bake the factor.
+    controls.maxDistance = camera.position.distanceTo(modelCenter) * 1.18;
 
     // --- Camera poses for plaque navigation ---
     // Remember this opening pose so we can fly back to it later.
@@ -1147,6 +1154,38 @@ if (_shPanel) {
 }
 window.openShooterPanel = openShooterPanel;
 
+// ===== Runner panel (full-bleed Bunny Hop, opened by the ground rabbit) =====
+const _rnPanel = document.getElementById('runner-panel');
+let _runner = null; // game instance, built lazily on first open
+
+// Open the Runner panel and (re)start a fresh game. No camera flight.
+function openRunnerPanel() {
+  if (!_rnPanel) return;
+  _panelOpen = true;
+  _rnPanel.classList.add('open');
+  _rnPanel.setAttribute('aria-hidden', 'false');
+  if (!_runner) _runner = createRunnerGame(_rnPanel);
+  _runner.start();
+}
+
+// Close the Runner panel and stop the game. No flyHome() — opening it
+// never moved the camera.
+function closeRunnerPanel() {
+  if (!_rnPanel || !_rnPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  if (_runner) _runner.stop();
+  _rnPanel.classList.remove('open');
+  if (_rnPanel.contains(document.activeElement)) document.activeElement.blur();
+  _rnPanel.setAttribute('aria-hidden', 'true');
+}
+
+// Wire the Runner panel's Back button. Also exposed to the console so the
+// game can be opened/tested directly.
+if (_rnPanel) {
+  _rnPanel.querySelector('.panel-back').addEventListener('click', closeRunnerPanel);
+}
+window.openRunnerPanel = openRunnerPanel;
+
 // ===== Plaque hover + click (raycaster) =====
 // A raycaster shoots a ray from the camera through the cursor into the scene.
 const _raycaster = new THREE.Raycaster();
@@ -1232,6 +1271,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
     if (prev) prev.material.opacity = 0;
   }
   if (grp) {                               // light up the hovered star
+    _playHoverSfx();
     const spr = _starGlows.get(grp);
     if (spr) {
       // Re-read window.STAR_GLOW so console tweaks apply without a reload.
@@ -1254,6 +1294,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   const over = _raycaster.intersectObject(_dartTarget, true).length > 0;
   if (over === _dartHot) return;          // nothing changed
   _dartHot = over;
+  if (over) _playHoverSfx();
   // Re-read window.DART_GLOW so console tweaks apply without a reload.
   _dartGlow.material.color.set(window.DART_GLOW.color);
   _dartGlow.scale.setScalar(DART_TARGET.r * window.DART_GLOW.scale);
@@ -1327,6 +1368,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   const over = _raycaster.intersectObjects(_rabbitMeshes, true).length > 0;
   if (over === _rabbitHot) return;          // nothing changed
   _rabbitHot = over;
+  if (over) _playHoverSfx();
   _setRabbitGlow(over);
 });
 
@@ -1359,6 +1401,7 @@ renderer.domElement.addEventListener('click', (event) => {
     _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
     _raycaster.setFromCamera(_pointer, camera);
     if (_raycaster.intersectObject(_dartTarget, true).length) {
+      _playClickSfx();
       openDartsPanel();
       return;
     }
@@ -1370,7 +1413,20 @@ renderer.domElement.addEventListener('click', (event) => {
     _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
     _raycaster.setFromCamera(_pointer, camera);
     if (_raycaster.intersectObjects(_starMeshes, false).length) {
+      _playClickSfx();
       openShooterPanel();
+      return;
+    }
+  }
+  // Clicking the cute ground rabbit opens the Bunny Hop runner.
+  if (_rabbitMeshes.length) {
+    const r = renderer.domElement.getBoundingClientRect();
+    _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+    _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+    _raycaster.setFromCamera(_pointer, camera);
+    if (_raycaster.intersectObjects(_rabbitMeshes, true).length) {
+      _playClickSfx();
+      openRunnerPanel();
       return;
     }
   }
@@ -1382,12 +1438,14 @@ renderer.domElement.addEventListener('click', (event) => {
     _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
     _raycaster.setFromCamera(_pointer, camera);
     if (_raycaster.intersectObject(window.aboutLabel, true).length) {
+      _playClickSfx();
       _flyToAbout();
       return;
     }
   }
   const p = _plaqueAtEvent(event);
   if (!p) return;
+  _playClickSfx();                 // every plaque/floor route does something
   console.log('Plaque clicked:', p.name);
   if (p.name === 'sign-about') _flyToAbout();
   if (p.name === 'sign-projects') {
@@ -1482,10 +1540,53 @@ function _beginAfterIntro() {
   setTimeout(() => { controls.autoRotate = true; }, 4000);
 }
 
-// START → fade the overlay out, jump the camera far behind/above, then
-// sweep it in to the opening pose.
+// Audio: soft looping background music + a one-shot START chime. Both are
+// kicked off from the START click — a user gesture, which is what browsers
+// require before they'll allow audio to play.
+const _bgm = new Audio('/backgr0und.mpeg');
+_bgm.loop = true;
+_bgm.volume = 0.06;            // very low — it sits quietly under everything
+const _startSfx = new Audio('/start.mpeg');
+_startSfx.volume = 0.6;
+// Soft UI tick shared by the star / ground-rabbit / dart-medallion hovers.
+const _hoverSfx = new Audio('/butt0n_1.mpeg');
+_hoverSfx.volume = 0.03;
+let _lastHoverSfx = 0;
+function _playHoverSfx() {
+  const now = performance.now();
+  if (now - _lastHoverSfx < 80) return;   // throttle rapid re-hovers
+  _lastHoverSfx = now;
+  _hoverSfx.currentTime = 0;
+  _hoverSfx.play().catch(() => {});
+}
+
+// Generic UI click — plays for any DOM button/link that does something,
+// and for the 3D scene actions (wired into the canvas click handler). The
+// intro START button has its own chime, so it's skipped here.
+const _clickSfx = new Audio('/CIick.mpeg');
+_clickSfx.volume = 0.4;
+let _lastClickSfx = 0;
+function _playClickSfx() {
+  const now = performance.now();
+  if (now - _lastClickSfx < 60) return;   // dedupe double-fires
+  _lastClickSfx = now;
+  _clickSfx.currentTime = 0;
+  _clickSfx.play().catch(() => {});
+}
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('button, a[href]');
+  if (!el || el.classList.contains('intro-start')) return;
+  _playClickSfx();
+});
+
+// START → play the chime, fade the overlay out, jump the camera far
+// behind/above, then sweep it in to the opening pose. The looping music
+// starts 1s later and sits quietly under everything.
 if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
+    _startSfx.currentTime = 0;
+    _startSfx.play().catch(() => {});
+    setTimeout(() => { _bgm.play().catch(() => {}); }, 1000);
     if (_introEl) {
       _introEl.classList.add('hidden');
       setTimeout(() => { _introEl.style.display = 'none'; }, 800);

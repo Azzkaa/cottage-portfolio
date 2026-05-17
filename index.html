@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>cottage-portfolio</title>
+    <title>Azka's Portfolio</title>
     <!-- Critical: hide overlay panels before style.css (JS-injected by Vite)
          loads, so they don't flash visible on first paint. style.css comes
          later in the cascade and restores .panel/.panel.open behaviour. -->
@@ -229,6 +229,15 @@
       <div class="panel-stage">
         <div class="shooter-frame" role="dialog" aria-label="Carrot Blaster mini-game">
           <canvas class="shooter-canvas" aria-label="Carrot Blaster mini-game"></canvas>
+          <button class="panel-back" type="button">&larr; Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="runner-panel" class="panel panel--game" aria-hidden="true">
+      <div class="panel-stage">
+        <div class="runner-frame" role="dialog" aria-label="Bunny Hop mini-game">
+          <canvas class="runner-canvas" aria-label="Bunny Hop mini-game"></canvas>
           <button class="panel-back" type="button">&larr; Back</button>
         </div>
       </div>
