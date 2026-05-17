@@ -665,11 +665,15 @@ loader.load(
     camera.lookAt(modelCenter);          // aim the camera at the model
     controls.target.copy(modelCenter);   // orbit around the model centre
     controls.update();                   // apply the changes
-    // Cap how far the user can dolly out so the 40×40 ground's edge never
-    // comes into view (relative to the opening orbit radius; only constrains
-    // free orbiting — scripted camera flies bypass controls.update()).
-    // Tunable live via controls.maxDistance, then re-bake the factor.
-    controls.maxDistance = camera.position.distanceTo(modelCenter) * 1.18;
+    // Cap how far the user can dolly out (relative to the opening orbit
+    // radius; only constrains free orbiting — scripted flies bypass
+    // controls.update()). Desktop stays tight at 1.18 so the 40×40
+    // ground edge can't show; phones get more room (1.5) since the
+    // narrow portrait view felt cramped — the tall FOV keeps the edge
+    // mostly out. Tunable live via controls.maxDistance, then re-bake.
+    const _smallScreen = Math.min(window.innerWidth, window.innerHeight) < 760;
+    controls.maxDistance =
+      camera.position.distanceTo(modelCenter) * (_smallScreen ? 1.5 : 1.18);
 
     // --- Camera poses for plaque navigation ---
     // Remember this opening pose so we can fly back to it later.
@@ -1722,7 +1726,16 @@ if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
     _startSfx.currentTime = 0;
     _startSfx.play().catch(() => {});
-    setTimeout(() => { _bgm.play().catch(() => {}); }, 1000);
+    // Mobile blocks a play() that isn't inside the tap gesture, so the
+    // old deferred play() never started bgm on phones. Start it muted
+    // NOW (allowed within this gesture, loops silently), then unmute
+    // after 1s — same "music fades in ~1s later" feel, but mobile-safe.
+    _bgm.muted = true;
+    _bgm.play().then(() => {
+      setTimeout(() => { _bgm.muted = false; }, 1000);
+    }).catch(() => {
+      setTimeout(() => { _bgm.play().catch(() => {}); }, 1000);
+    });
     if (_introEl) {
       _introEl.classList.add('hidden');
       setTimeout(() => { _introEl.style.display = 'none'; }, 800);

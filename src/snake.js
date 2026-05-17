@@ -10,7 +10,6 @@
 export function createSnakeGame(rootEl) {
   const canvas = rootEl.querySelector('.snake-canvas');
   const ctx = canvas.getContext('2d');
-  const dpad = rootEl.querySelector('.snake-dpad');
   const frame = rootEl.querySelector('.snake-frame'); // authoritative size source
   const backBtn = rootEl.querySelector('.panel-back'); // never spawn the star under it
 
@@ -170,51 +169,41 @@ export function createSnakeGame(rootEl) {
     }
   }
 
-  // Touch: swipe to steer; a small tap just starts/continues.
-  let tsx = 0, tsy = 0;
+  // Touch: swipe / drag anywhere to steer — no on-screen buttons. A tap
+  // starts (or restarts) the game; on Credits only the button reacts.
+  let tax = 0, tay = 0;                       // moving swipe anchor
+  const SWIPE = 22;                           // px of drag before it turns
   function onTouchStart(e) {
     const t = e.changedTouches[0];
-    tsx = t.clientX; tsy = t.clientY;
+    tax = t.clientX; tay = t.clientY;
+    if (phase === 'credits') return;          // Credits reacts on touchend
+    if (phase !== 'play') begin();            // tap / swipe-start begins play
   }
-  function onTouchEnd(e) {
+  function onTouchMove(e) {
+    if (phase !== 'play') return;
     const t = e.changedTouches[0];
-    if (phase === 'credits') {                 // only the button is live here
-      if (inContinue(t.clientX, t.clientY)) continueGame();
-      return;
-    }
-    const dx = t.clientX - tsx, dy = t.clientY - tsy;
-    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
-      if (phase !== 'play') begin();
-      return;
-    }
-    if (phase !== 'play') begin();
+    const dx = t.clientX - tax, dy = t.clientY - tay;
+    if (Math.abs(dx) < SWIPE && Math.abs(dy) < SWIPE) return;
     if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
     else turn(0, dy > 0 ? 1 : -1);
+    tax = t.clientX; tay = t.clientY;         // re-anchor → continuous steering
+  }
+  function onTouchEnd(e) {
+    if (phase !== 'credits') return;          // only the Keep-playing button
+    const t = e.changedTouches[0];
+    if (inContinue(t.clientX, t.clientY)) continueGame();
   }
 
-  // Mouse click anywhere on the board: start / restart (desktop had no
-  // pointer path before — only keys/touch/dpad — so clicking did nothing).
-  // No-op while playing; steering stays keys/swipe/dpad. A touch tap also
-  // synthesises a click, but that fires after onTouchEnd already set
-  // phase='play', so this stays a no-op then (no double-start).
+  // Mouse click anywhere on the board: start / restart. No-op while
+  // playing; steering stays keyboard (desktop) / swipe (touch). A touch
+  // tap also synthesises a click, but that fires after onTouchStart
+  // already began play, so this stays a no-op then (no double-start).
   function onMouseClick(e) {
     if (phase === 'credits') {
       if (inContinue(e.clientX, e.clientY)) continueGame();
       return;
     }
     if (phase !== 'play') begin();
-  }
-
-  function onDpad(e) {
-    const b = e.target.closest('[data-dir]');
-    if (!b) return;
-    e.preventDefault();
-    if (phase !== 'play') begin();
-    const d = b.dataset.dir;
-    if (d === 'up') turn(0, -1);
-    else if (d === 'down') turn(0, 1);
-    else if (d === 'left') turn(-1, 0);
-    else if (d === 'right') turn(1, 0);
   }
 
   // --- Simulation ---
@@ -361,40 +350,80 @@ export function createSnakeGame(rootEl) {
     ctx.restore();
 
     // ---- "Keep playing" button — drawn AFTER the fade save/restore so
-    // it stays crisp & full-opacity. Its rect is cached in continueBtn
-    // for the click/tap hit-test. Tapping it resumes the saved game.
-    const bw = Math.min(R * 0.82, 210);
-    const bh = Math.max(34, Math.round(min * 0.052));
+    // it stays crisp & full-opacity. A soft pill: warm gradient + glossy
+    // top sheen + pulsing glow + a play glyph in a softened disc. Its
+    // rect is cached in continueBtn for the click/tap hit-test.
+    const fsB = Math.max(15, Math.round(min * 0.033));
+    ctx.font = `700 ${fsB}px Quicksand, sans-serif`;
+    const label = 'Keep playing';
+    const lblW = ctx.measureText(label).width;
+    const ico = fsB * 1.25;                       // play disc diameter
+    const padX = fsB * 1.05;
+    const gap = fsB * 0.5;
+    const bw = Math.min(lblW + ico + gap + padX * 2, R * 1.3, vw * 0.82);
+    const bh = Math.round(fsB * 2.15);
     const bX = cx0 - bw / 2;
-    const bY = cy0 + R * 0.30 - bh / 2;
+    const bY = cy0 + R * 0.34 - bh / 2;
     continueBtn = { x0: bX, y0: bY, x1: bX + bw, y1: bY + bh };
 
-    const bp = 0.5 + 0.5 * Math.sin(now / 360);   // gentle attention pulse
+    const bp = 0.5 + 0.5 * Math.sin(now / 520);   // slow soft pulse
     const rr = bh / 2;
+    const pill = () => {
+      ctx.beginPath();
+      ctx.moveTo(bX + rr, bY);
+      ctx.arcTo(bX + bw, bY, bX + bw, bY + bh, rr);
+      ctx.arcTo(bX + bw, bY + bh, bX, bY + bh, rr);
+      ctx.arcTo(bX, bY + bh, bX, bY, rr);
+      ctx.arcTo(bX, bY, bX + bw, bY, rr);
+      ctx.closePath();
+    };
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(bX + rr, bY);
-    ctx.arcTo(bX + bw, bY, bX + bw, bY + bh, rr);
-    ctx.arcTo(bX + bw, bY + bh, bX, bY + bh, rr);
-    ctx.arcTo(bX, bY + bh, bX, bY, rr);
-    ctx.arcTo(bX, bY, bX + bw, bY, rr);
-    ctx.closePath();
-    const bg = ctx.createLinearGradient(bX, bY, bX, bY + bh);
-    bg.addColorStop(0, '#FF9D4D');
-    bg.addColorStop(1, '#E9701C');
-    ctx.shadowColor = `rgba(255, 150, 80, ${0.4 + bp * 0.45})`;
-    ctx.shadowBlur = 18;
+    // Soft outer glow.
+    pill();
+    ctx.shadowColor = `rgba(255, 150, 70, ${0.4 + bp * 0.4})`;
+    ctx.shadowBlur = 24 + bp * 8;
+    const bg = ctx.createLinearGradient(0, bY, 0, bY + bh);
+    bg.addColorStop(0, '#FFB85C');
+    bg.addColorStop(0.5, '#FF9D3D');
+    bg.addColorStop(1, '#EC7C1E');
     ctx.fillStyle = bg;
     ctx.fill();
     ctx.shadowBlur = 0;
+    // Glossy top sheen.
+    ctx.save();
+    pill();
+    ctx.clip();
+    const sheen = ctx.createLinearGradient(0, bY, 0, bY + bh * 0.6);
+    sheen.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+    sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sheen;
+    ctx.fillRect(bX, bY, bw, bh * 0.6);
+    ctx.restore();
+    // Crisp warm rim.
+    pill();
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255, 232, 200, 0.7)';
+    ctx.strokeStyle = 'rgba(255, 244, 216, 0.85)';
     ctx.stroke();
-    ctx.fillStyle = '#2A0F08';
-    ctx.font = `700 ${Math.round(bh * 0.42)}px Quicksand, sans-serif`;
-    ctx.textAlign = 'center';
+    // Play glyph in a soft dark disc (left).
+    const icx = bX + padX + ico / 2;
+    const icy = bY + bh / 2;
+    ctx.beginPath();
+    ctx.arc(icx, icy, ico / 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(58, 18, 6, 0.28)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(icx - ico * 0.15, icy - ico * 0.22);
+    ctx.lineTo(icx + ico * 0.25, icy);
+    ctx.lineTo(icx - ico * 0.15, icy + ico * 0.22);
+    ctx.closePath();
+    ctx.fillStyle = '#3a1206';
+    ctx.fill();
+    // Label.
+    ctx.fillStyle = '#3a1206';
+    ctx.font = `700 ${fsB}px Quicksand, sans-serif`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('▶  Keep playing', cx0, bY + bh / 2 + 1);
+    ctx.fillText(label, icx + ico / 2 + gap, icy + 1);
     ctx.restore();
   }
 
@@ -613,8 +642,8 @@ export function createSnakeGame(rootEl) {
     window.addEventListener('keydown', onKey);
     canvas.addEventListener('click', onMouseClick);
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: true });
     canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-    if (dpad) dpad.addEventListener('click', onDpad);
     window.addEventListener('resize', resize);
     resize();               // sizes canvas + derives grid + first paint
     newRound();             // idle snake behind the Start screen
@@ -629,8 +658,8 @@ export function createSnakeGame(rootEl) {
     window.removeEventListener('keydown', onKey);
     canvas.removeEventListener('click', onMouseClick);
     canvas.removeEventListener('touchstart', onTouchStart);
+    canvas.removeEventListener('touchmove', onTouchMove);
     canvas.removeEventListener('touchend', onTouchEnd);
-    if (dpad) dpad.removeEventListener('click', onDpad);
     window.removeEventListener('resize', resize);
   }
 

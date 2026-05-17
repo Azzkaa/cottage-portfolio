@@ -724,46 +724,6 @@ body > canvas {
   box-shadow: 0 12px 24px rgba(255, 79, 168, 0.55);
 }
 
-/* On-screen D-pad: overlaid bottom-centre, touch devices only. */
-.snake-dpad {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 16px;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-.snake-dpad-mid {
-  display: flex;
-  gap: 56px;
-}
-.snake-dpad button {
-  width: 50px;
-  height: 50px;
-  border: none;
-  border-radius: 14px;
-  cursor: pointer;
-  background: rgba(255, 140, 66, 0.22);
-  color: #ffd0a0;
-  font-size: 16px;
-  line-height: 1;
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  transition: transform 0.12s ease, background 0.12s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.snake-dpad button:active {
-  transform: scale(0.92);
-  background: rgba(255, 140, 66, 0.42);
-}
-/* Keyboard is enough on desktop — only show the D-pad for touch input */
-@media (pointer: fine) {
-  .snake-dpad { display: none; }
-}
-
 /* ===== Mobile robustness =====
    Mobile Safari/Chrome shrink the layout viewport as the URL bar shows/
    hides, so 100vh overshoots and the scene/games get clipped under the
