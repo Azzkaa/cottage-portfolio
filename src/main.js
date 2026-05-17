@@ -127,9 +127,10 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // Damping adds inertia so movement eases instead of stopping abruptly.
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-// Slowly auto-rotate when the user isn't interacting (re-tuned after load).
+// Slowly auto-rotate when the user isn't interacting (re-tuned after
+// load). Negative speed = spin to the right (positive went left).
 controls.autoRotate = true;
-controls.autoRotateSpeed = 0.5;
+controls.autoRotateSpeed = -0.5;
 
 // Lights are created inside the model callback (positioned by its bounds).
 
@@ -794,7 +795,7 @@ loader.load(
     // After the intro pan finishes, controls re-enable and auto-rotate
     // kicks in 4s later (see _beginAfterIntro).
     controls.autoRotate = false;
-    controls.autoRotateSpeed = 0.5;
+    controls.autoRotateSpeed = -0.5;
     controls.enabled = false;
 
     // ===== Lighting (created here so it can use the model's bounds) =====
