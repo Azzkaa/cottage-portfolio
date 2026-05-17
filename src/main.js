@@ -1675,31 +1675,55 @@ _bgm.loop = true;
 _bgm.volume = 0.5;             // prominent — author wants it clearly audible
 const _startSfx = new Audio(`${ASSET}start.mpeg`);
 _startSfx.volume = 0.6;
-// Soft UI tick shared by the star / ground-rabbit / dart-medallion hovers.
-const _hoverSfx = new Audio(`${ASSET}butt0n_1.mpeg`);
-_hoverSfx.volume = 0.03;
-let _lastHoverSfx = 0;
-function _playHoverSfx() {
-  const now = performance.now();
-  if (now - _lastHoverSfx < 80) return;   // throttle rapid re-hovers
-  _lastHoverSfx = now;
-  _hoverSfx.currentTime = 0;
-  _hoverSfx.play().catch(() => {});
+// One-shot UI SFX use the Web Audio API, NOT <audio>. HTMLAudioElement
+// has a long, variable start latency on every play() (it does a seek
+// back to 0 then decode), which made clicks sound ~a second late,
+// badly on mobile. Web Audio decodes each clip ONCE up front and fires
+// it from a buffer source with effectively zero latency.
+const _AC = window.AudioContext || window.webkitAudioContext;
+const _actx = _AC ? new _AC() : null;
+function _resumeAudio() {
+  if (_actx && _actx.state === 'suspended') _actx.resume().catch(() => {});
 }
+// Decode a clip once; `.buf` fills in when ready (the clips are tiny).
+function _loadSfx(url) {
+  const slot = { buf: null };
+  if (_actx) {
+    fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((ab) => _actx.decodeAudioData(ab,
+        (b) => { slot.buf = b; }, () => {}))
+      .catch(() => {});
+  }
+  return slot;
+}
+// Fire a decoded clip immediately (throttled). A fresh source per play
+// so rapid re-triggers overlap cleanly instead of cutting each other.
+function _oneShot(slot, vol, ref, gapMs) {
+  const now = performance.now();
+  if (now - ref.t < gapMs) return;
+  ref.t = now;
+  if (!_actx || !slot.buf) return;
+  _resumeAudio();
+  const src = _actx.createBufferSource();
+  src.buffer = slot.buf;
+  const g = _actx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(_actx.destination);
+  src.start();
+}
+
+// Soft UI tick shared by the star / ground-rabbit / dart-medallion hovers.
+const _hoverBuf = _loadSfx(`${ASSET}butt0n_1.mpeg`);
+const _hoverRef = { t: 0 };
+function _playHoverSfx() { _oneShot(_hoverBuf, 0.03, _hoverRef, 80); }
 
 // Generic UI click — plays for any DOM button/link that does something,
 // and for the 3D scene actions (wired into the canvas click handler). The
 // intro START button has its own chime, so it's skipped here.
-const _clickSfx = new Audio(`${ASSET}CIick.mpeg`);
-_clickSfx.volume = 0.4;
-let _lastClickSfx = 0;
-function _playClickSfx() {
-  const now = performance.now();
-  if (now - _lastClickSfx < 60) return;   // dedupe double-fires
-  _lastClickSfx = now;
-  _clickSfx.currentTime = 0;
-  _clickSfx.play().catch(() => {});
-}
+const _clickBuf = _loadSfx(`${ASSET}CIick.mpeg`);
+const _clickRef = { t: 0 };
+function _playClickSfx() { _oneShot(_clickBuf, 0.4, _clickRef, 60); }
 document.addEventListener('click', (e) => {
   const el = e.target.closest && e.target.closest('button, a[href]');
   if (!el || el.classList.contains('intro-start')) return;
@@ -1708,22 +1732,16 @@ document.addEventListener('click', (e) => {
 
 // Camera-move whoosh — plays on every scripted fly (zoom in/out, dive,
 // flyHome, the START sweep). Wired into flyCamera() so it's a single hook.
-const _whooshSfx = new Audio(`${ASSET}wh00sh.mpeg`);
-_whooshSfx.volume = 0.1;
-let _lastWhooshSfx = 0;
-function _playWhooshSfx() {
-  const now = performance.now();
-  if (now - _lastWhooshSfx < 120) return;  // dedupe back-to-back flies
-  _lastWhooshSfx = now;
-  _whooshSfx.currentTime = 0;
-  _whooshSfx.play().catch(() => {});
-}
+const _whooshBuf = _loadSfx(`${ASSET}wh00sh.mpeg`);
+const _whooshRef = { t: 0 };
+function _playWhooshSfx() { _oneShot(_whooshBuf, 0.1, _whooshRef, 120); }
 
 // START → play the chime, fade the overlay out, jump the camera far
-// behind/above, then sweep it in to the opening pose. The looping music
-// starts 1s later and sits quietly under everything.
+// behind/above, then sweep it in to the opening pose. This tap is also
+// where the Web Audio context is unlocked and the looping music starts.
 if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
+    _resumeAudio();              // unlock the Web Audio context (SFX)
     _startSfx.currentTime = 0;
     _startSfx.play().catch(() => {});
     // Start the looping music synchronously INSIDE this tap. iOS won't
