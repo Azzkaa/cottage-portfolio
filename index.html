@@ -8,23 +8,38 @@
     <!-- Critical: hide overlay panels before style.css (JS-injected by Vite)
          loads, so they don't flash visible on first paint. style.css comes
          later in the cascade and restores .panel/.panel.open behaviour. -->
-    <style>.panel{display:none}</style>
+    <style>.panel{display:none}#intro{position:fixed;inset:0;z-index:9999;background:#060309;display:flex;align-items:center;justify-content:center}#intro .intro-start{display:none}</style>
   </head>
   <body>
     <div id="app"></div>
+
+    <div id="intro" aria-label="Loading">
+      <div class="intro-inner">
+        <svg class="intro-icon" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M22 10h13l9 11v33a3 3 0 0 1-3 3H22a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Z"
+                fill="none" stroke="#fdf3f6" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M35 10l9 11h-9z" fill="#fdf3f6"/>
+          <rect x="27" y="3" width="6" height="9" rx="2" fill="#fdf3f6"/>
+        </svg>
+        <p class="intro-load">Pouring your juice&hellip; <span class="intro-pct">0</span>%</p>
+        <button type="button" class="intro-start">START</button>
+      </div>
+    </div>
 
     <div id="about-panel" class="panel" aria-hidden="true">
       <div class="panel-stage">
       <div class="panel-inner" role="dialog" aria-label="About Azka Aftab">
         <button class="panel-back" type="button">&larr; Back</button>
         <nav class="panel-tabs">
-          <button type="button" data-view="about" class="active">About</button>
+          <button type="button" data-view="about" class="active">About Me</button>
           <button type="button" data-view="facts">Quick Facts</button>
+          <button type="button" data-view="skills">Skills</button>
           <button type="button" data-view="exp">Experience</button>
         </nav>
 
         <section class="panel-view active" data-view="about">
           <h1>Hi, I&rsquo;m Azka Aftab</h1>
+          <img class="about-photo" src="/azka.jpg" alt="Portrait of Azka Aftab" />
           <p class="lead">I design and build software once in a while. I care about making things that feel fast, accessible, and enjoyable&mdash;turning ideas into experiences people actually like to use :p</p>
           <h2>Who am I</h2>
           <p>I enjoy shaping experiences end-to-end&mdash;from user flows and prototypes to production code and polish. Currently wrapping up at Universiti Teknologi Malaysia (CGPA 3.89).</p>
@@ -34,28 +49,45 @@
 
         <section class="panel-view" data-view="facts">
           <h1>Quick Facts</h1>
-          <!-- EDIT THESE: placeholder facts, swap in your real ones -->
           <ul class="facts">
-            <li>Based in Malaysia</li>
-            <li>Final year @ Universiti Teknologi Malaysia &mdash; CGPA 3.89</li>
-            <li>Full-stack developer &amp; researcher</li>
-            <li>Currently: <em>add what you&rsquo;re building / learning</em></li>
-            <li>For fun: <em>add a hobby or two</em></li>
+            <li>UTM &mdash; Software Engineering (CGPA 3.89)</li>
+            <li>Favourite film: <em>Tangled</em></li>
+            <li>Inspiration: Cleo Abram</li>
+            <li>Sports keep me balanced</li>
+            <li>Photography: light &amp; composition nerd</li>
+          </ul>
+        </section>
+
+        <section class="panel-view" data-view="skills">
+          <h1>Skills</h1>
+          <ul class="facts">
+            <li><strong>Languages</strong> &mdash; JavaScript &middot; Java &middot; Python &middot; SQL</li>
+            <li><strong>Frontend</strong> &mdash; HTML &amp; CSS &middot; Three.js</li>
+            <li><strong>Backend</strong> &mdash; Spring &middot; Node.js &middot; REST APIs</li>
+            <li><strong>ML &amp; Computer Vision</strong> &mdash; PyTorch &middot; TensorFlow &middot; OpenCV &middot; SAM &middot; MobileNetV2</li>
+            <li><strong>Tools &amp; Automation</strong> &mdash; n8n &middot; Git &middot; OpenAI API &middot; Gmail/Telegram APIs</li>
           </ul>
         </section>
 
         <section class="panel-view" data-view="exp">
           <h1>Experience</h1>
-          <!-- EDIT THESE: placeholder entries, swap in your real education/work -->
           <div class="exp-item">
-            <h3>Universiti Teknologi Malaysia</h3>
-            <span class="exp-meta">Degree &middot; CGPA 3.89 &middot; expected 20XX</span>
-            <p>One line about your studies / focus.</p>
+            <h3>Project Management Intern &mdash; Fireworks Solutions Sdn Bhd</h3>
+            <span class="exp-meta">Aug 2024 &ndash; Feb 2025 &middot; Selangor, MY</span>
+            <ul>
+              <li>Collaborated with the dev team across front-end and back-end tasks.</li>
+              <li>Coordinated features, timelines, and stakeholder updates.</li>
+              <li>Helped QA small features and wrote basic implementation notes.</li>
+            </ul>
           </div>
           <div class="exp-item">
-            <h3>Role &mdash; Organisation</h3>
-            <span class="exp-meta">Month 20XX &ndash; Month 20XX</span>
-            <p>What you did, in a line or two.</p>
+            <h3>Student Research Assistant &mdash; Universiti Teknologi Malaysia (UTM)</h3>
+            <span class="exp-meta">Feb 2025 &ndash; Jul 2025 &middot; Kuala Lumpur, MY</span>
+            <ul>
+              <li>Researched thermal data analysis for fault detection.</li>
+              <li>Prepared datasets, ran experiments, and tracked results.</li>
+              <li>Supported technical writing for thesis/report sections.</li>
+            </ul>
           </div>
         </section>
       </div>
@@ -72,21 +104,63 @@
         <h1>Projects</h1>
         <p class="lead">A few things I&rsquo;ve built &amp; shipped.</p>
         <div class="proj-list">
-          <!-- EDIT THESE: real details from azka-aftab-25.vercel.app -->
+          <!-- NOTE: each .proj-link href is a PLACEHOLDER pointing at the GitHub
+               profile. Swap in the real per-repo URLs when provided. -->
           <article class="proj">
+            <img class="proj-shot" src="/n8n.png" alt="Email AI Auto-Reply workflow screenshot" loading="lazy" />
             <h3>Email AI Auto-Reply</h3>
-            <p>Automated email triage that drafts replies and routes them to Telegram for a quick approve-and-send.</p>
-            <div class="proj-tags"><span>n8n</span><span>Gmail API</span><span>OpenAI</span><span>Telegram</span></div>
+            <p>AI-powered Gmail auto-responder with a Telegram approval workflow.</p>
+            <div class="proj-tags"><span>n8n</span><span>Gmail</span><span>OpenAI</span><span>Telegram</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
           </article>
           <article class="proj">
+            <img class="proj-shot" src="/SKSU.png" alt="Student Portal SKSU screenshot" loading="lazy" />
             <h3>Student Portal &mdash; SKSU</h3>
-            <p>A student records &amp; enrollment portal with role-based access.</p>
+            <p>Portal features for students: auth, workflows, and data.</p>
             <div class="proj-tags"><span>Java</span><span>Spring</span><span>SQL</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
           </article>
           <article class="proj">
+            <img class="proj-shot" src="/fyp22.png" alt="Fault Detection for Substations screenshot" loading="lazy" />
             <h3>Fault Detection for Substations</h3>
-            <p>A computer-vision model that spots faults in substation imagery.</p>
+            <p>Classifies RMU/VCB thermal images, segments with SAM, and flags hotspots (&Delta;T).</p>
             <div class="proj-tags"><span>Python</span><span>PyTorch</span><span>TensorFlow</span><span>OpenCV</span><span>SAM</span><span>MobileNetV2</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+          </article>
+          <article class="proj">
+            <img class="proj-shot" src="/penguins.png" alt="Penguin Clustering & Analysis screenshot" loading="lazy" />
+            <h3>Penguin Clustering &amp; Analysis</h3>
+            <p>Unsupervised clustering with exploratory data analysis.</p>
+            <div class="proj-tags"><span>Python</span><span>ML</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+          </article>
+          <article class="proj">
+            <img class="proj-shot" src="/hands.png" alt="Handwritten Digit Recognition screenshot" loading="lazy" />
+            <h3>Handwritten Digit Recognition</h3>
+            <p>An ML pipeline for handwritten digit classification.</p>
+            <div class="proj-tags"><span>Python</span><span>ML</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+          </article>
+          <article class="proj">
+            <img class="proj-shot" src="/sp.png" alt="SP Course Assignment Tracking System screenshot" loading="lazy" />
+            <h3>SP Course Assignment Tracking System</h3>
+            <p>A web app to track assignments &amp; student progress.</p>
+            <div class="proj-tags"><span>Java</span><span>Spring</span><span>MySQL</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+          </article>
+          <article class="proj">
+            <img class="proj-shot" src="/vue-taskmanager.png" alt="Vue Task Manager screenshot" loading="lazy" />
+            <h3>Vue Task Manager</h3>
+            <p>A lightweight task manager built from reusable components.</p>
+            <div class="proj-tags"><span>Vue.js</span><span>JavaScript</span><span>CSS</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
+          </article>
+          <article class="proj">
+            <img class="proj-shot" src="/backend.png" alt="Property App Backend screenshot" loading="lazy" />
+            <h3>Property App Backend</h3>
+            <p>REST APIs and services for a property app.</p>
+            <div class="proj-tags"><span>Node</span><span>Express</span><span>DB</span></div>
+            <a class="proj-link" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer">View on GitHub &rarr;</a>
           </article>
         </div>
       </div>
@@ -108,6 +182,54 @@
             </div>
             <button data-dir="down" type="button" aria-label="Down">&#9660;</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="contact-panel" class="panel" aria-hidden="true">
+      <div class="panel-stage">
+      <div class="panel-inner" role="dialog" aria-label="Contact Azka Aftab">
+        <button class="panel-back" type="button">&larr; Back</button>
+        <h1>Contact</h1>
+        <p class="lead">Let&rsquo;s talk &mdash; pick whichever&rsquo;s easiest.</p>
+        <div class="contact-links">
+          <a class="contact-btn" href="mailto:azka.aftab25@gmail.com" aria-label="Email Azka Aftab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>
+            <span>Email</span>
+          </a>
+          <a class="contact-btn" href="https://github.com/Azzkaa" target="_blank" rel="noopener noreferrer" aria-label="GitHub profile">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12a11.5 11.5 0 0 0 7.9 10.9c.6.1.8-.25.8-.55v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.2-1.3-5.2-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.2 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.65.8.54A11.5 11.5 0 0 0 23.5 12C23.5 5.7 18.3.5 12 .5Z"/></svg>
+            <span>GitHub</span>
+          </a>
+          <a class="contact-btn" href="https://www.linkedin.com/in/azka-aftab-59b027376/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn profile">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29ZM5.34 7.43a2.07 2.07 0 1 1 0-4.13 2.07 2.07 0 0 1 0 4.13ZM7.12 20.45H3.55V9h3.57v11.45ZM22.22 0H1.77C.8 0 0 .77 0 1.72v20.55C0 23.23.8 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.72C24 .77 23.2 0 22.22 0Z"/></svg>
+            <span>LinkedIn</span>
+          </a>
+          <a class="contact-btn" href="https://wa.me/60176491858" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M.06 24l1.69-6.16a11.87 11.87 0 0 1-1.59-5.95C.16 5.34 5.5 0 12.05 0a11.82 11.82 0 0 1 8.41 3.49 11.82 11.82 0 0 1 3.48 8.41c0 6.56-5.34 11.89-11.89 11.89a11.9 11.9 0 0 1-5.69-1.45L.06 24Zm6.6-3.8c1.68 1 3.28 1.59 5.39 1.59 5.45 0 9.89-4.43 9.89-9.89 0-5.46-4.42-9.89-9.88-9.89-5.45 0-9.89 4.43-9.89 9.88a9.86 9.86 0 0 0 1.51 5.26l-1 3.65 3.67-.96Zm11.39-5.46c-.07-.13-.27-.2-.57-.35-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.79.37s-1.04 1.02-1.04 2.48 1.07 2.88 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.42Z"/></svg>
+            <span>WhatsApp</span>
+          </a>
+        </div>
+      </div>
+        <span class="mascot mascot--tr" aria-hidden="true"><i class="mascot-face"></i></span>
+        <span class="mascot mascot--bl" aria-hidden="true"><i class="mascot-face"></i></span>
+      </div>
+    </div>
+
+    <div id="darts-panel" class="panel panel--game" aria-hidden="true">
+      <div class="panel-stage">
+        <div class="darts-frame" role="dialog" aria-label="Darts mini-game">
+          <canvas class="darts-canvas" aria-label="Darts mini-game"></canvas>
+          <button class="panel-back" type="button">&larr; Back</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="shooter-panel" class="panel panel--game" aria-hidden="true">
+      <div class="panel-stage">
+        <div class="shooter-frame" role="dialog" aria-label="Carrot Blaster mini-game">
+          <canvas class="shooter-canvas" aria-label="Carrot Blaster mini-game"></canvas>
+          <button class="panel-back" type="button">&larr; Back</button>
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ export function createSnakeGame(rootEl) {
   const backBtn = rootEl.querySelector('.panel-back'); // never spawn the star under it
 
   const CELL = 30;            // target px per grid cell (grid derived from size)
-  const TICK_MS = 120;        // ms between snake steps (lower = faster)
+  const TICK_MS = 150;        // ms between snake steps (lower = faster)
   const CREDITS_AT = 2;       // stars to eat before the Credits screen opens
 
   // Layout (recomputed in resize): grid size, square cell px, board origin.

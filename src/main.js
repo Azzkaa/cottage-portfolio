@@ -12,6 +12,15 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 // Self-contained Snake mini-game shown inside the Credits panel.
 import { createSnakeGame } from './snake.js';
+// Self-contained Darts mini-game shown inside the Darts panel.
+import { createDartsGame } from './darts.js';
+// Self-contained "Carrot Blaster" shooter — opened by clicking a star.
+import { createShooterGame } from './shooter.js';
+
+// Baked world position + radius of the round medallion's click-target,
+// derived from live console clicks on the medallion. To re-tune: nudge
+// window.dartTarget in the console, then re-bake these numbers.
+const DART_TARGET = { x: 0.672, y: 1.787, z: -0.476, r: 0.14 };
 
 // The scene is the root container holding every 3D object, light and camera.
 const scene = new THREE.Scene();
@@ -198,19 +207,10 @@ loader.load(
       ctx.letterSpacing = '8px';
       ctx.fillText('AZKA AFTAB', canvas.width / 2, 160);
 
-      // Subtitles: smaller cream monospace, left-aligned as a block.
-      // Reset letterSpacing first — the 8px above is for the big name only;
-      // left on, it widened these lines until "DEVELOPER" ran off-canvas.
-      ctx.fillStyle = '#F2F2F0';
-      ctx.font = 'bold 52px "Courier New", monospace';
-      ctx.letterSpacing = '0px';
-      ctx.textAlign = 'left';
-      const sub1 = '> FULL STACK DEVELOPER';
-      const sub2 = '> RESEARCHER';
-      const subMaxW = Math.max(ctx.measureText(sub1).width, ctx.measureText(sub2).width);
-      const subX = (canvas.width - subMaxW) / 2; // block-centred, fully on-canvas
-      ctx.fillText(sub1, subX, 280);
-      ctx.fillText(sub2, subX, 360);
+      // The 3 subtitle lines (FULL STACK DEVELOPER / RESEARCHER / CONTACT ME)
+      // are NO LONGER baked into this texture — they are now separate,
+      // individually clickable meshes (see "Clickable floor lines" below),
+      // so this texture holds only the big name.
 
       // Wrap the canvas as a Three.js texture and return it.
       const texture = new THREE.CanvasTexture(canvas);
@@ -246,6 +246,63 @@ loader.load(
     // Exposed to the browser console for live position tweaking.
     window.nameText = nameText;
 
+    // ===== Clickable floor lines (replace the old baked subtitles) =====
+    // Each subtitle is now its own small plane parented to nameText, so it
+    // inherits the same flat-on-ground orientation + 0.7 scale. We push them
+    // into signMeshes so the EXISTING plaque raycaster gives them
+    // hover-recolour + click for free (no raycaster changes). The positions
+    // are reasoned starting guesses in nameText's LOCAL space — nudge
+    // window.floorLines[i].position in the console, then ask to bake.
+    function _makeLineTexture(label) {
+      const c = document.createElement('canvas');
+      const ctx2 = c.getContext('2d');
+      const fs = 52; // same size as the old subtitles
+      ctx2.font = `bold ${fs}px "Courier New", monospace`;
+      const tw = Math.ceil(ctx2.measureText(label).width);
+      c.width = tw + 40;
+      c.height = fs + 18;                  // tight padding → less transparent area
+      ctx2.font = `bold ${fs}px "Courier New", monospace`; // resize wipes ctx state
+      ctx2.clearRect(0, 0, c.width, c.height);
+      ctx2.fillStyle = '#FFFFFF';          // white so material.color can tint it
+      ctx2.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx2.shadowBlur = 12;
+      ctx2.textAlign = 'center';
+      ctx2.textBaseline = 'middle';
+      ctx2.fillText(label, c.width / 2, c.height / 2);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.needsUpdate = true;
+      return { tex: t, aspect: c.width / c.height };
+    }
+
+    // label, raycaster name, and starting Y in nameText-local space.
+    const _floorCfg = [
+      { label: '> FULL STACK DEVELOPER', name: 'floor-fullstack',  y: -0.10 },
+      { label: '> RESEARCHER',           name: 'floor-researcher', y: -0.42 },
+      { label: '> CONTACT ME',           name: 'floor-contact',    y: -0.74 },
+    ];
+    const _lineH = 0.27;                   // plane height in local units
+    window.floorLines = [];
+    _floorCfg.forEach((cfg) => {
+      const { tex, aspect } = _makeLineTexture(cfg.label);
+      const lmat = new THREE.MeshStandardMaterial({
+        map: tex, emissive: 0xffffff, emissiveMap: tex,
+        emissiveIntensity: 1.6, transparent: true, alphaTest: 0.01,
+        roughness: 0.9, metalness: 0,
+      });
+      lmat.color.set('#F2F2F0');           // cream by default (matches baseColor)
+      const lm = new THREE.Mesh(
+        new THREE.PlaneGeometry(_lineH * aspect, _lineH), lmat
+      );
+      lm.name = cfg.name;                  // raycaster routes the click by this
+      lm.userData.isInteractive = true;
+      lm.userData.baseColor = '#F2F2F0';   // _clearHover reverts to this
+      lm.position.set(0, cfg.y, 0.001);    // centred under the name, just proud
+      nameText.add(lm);                    // inherit the name's flat orientation
+      signMeshes.push(lm);                 // join the plaque raycast set
+      window.floorLines.push(lm);
+    });
+
     // ===== Cute rabbit prop on the ground, in front of the name text =====
     // Loaded after the shop so we can place it relative to nameText/ground.
     loader.load(
@@ -253,7 +310,18 @@ loader.load(
       (rgltf) => {
         const rabbit = rgltf.scene;
         rabbit.traverse((o) => {
-          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+          if (!o.isMesh) return;
+          o.castShadow = true;
+          o.receiveShadow = true;
+          // Clone so the hover-brighten can't leak into shared materials,
+          // and remember the base look so it can be restored on mouse-out.
+          o.material = o.material.clone();
+          const m = o.material;
+          m.userData._baseEI =
+            m.emissiveIntensity !== undefined ? m.emissiveIntensity : 1;
+          if (m.emissive) m.userData._baseEmis = m.emissive.clone();
+          if (m.color) m.userData._baseCol = m.color.clone();
+          _rabbitMeshes.push(o);
         });
         scene.add(rabbit);
         // Normalise to a small ~0.45-unit-tall prop regardless of the
@@ -273,6 +341,43 @@ loader.load(
         );
         rabbit.rotation.y = Math.PI / 2; // face back toward the viewer
         window.rabbit = rabbit;
+        // Give it its soft resting glow straight away.
+        _setRabbitGlow(false);
+
+        // ----- Hover fireflies: a small swarm that fades in around the
+        // rabbit only while it's hovered (animated in _updateRabbitFlies). -----
+        const _ffTex = (() => {
+          const fc = document.createElement('canvas');
+          fc.width = fc.height = 64;
+          const fx = fc.getContext('2d');
+          const gg = fx.createRadialGradient(32, 32, 0, 32, 32, 32);
+          gg.addColorStop(0.0, 'rgba(255, 255, 255, 1)');
+          gg.addColorStop(0.3, 'rgba(255, 224, 102, 0.85)');
+          gg.addColorStop(1.0, 'rgba(255, 224, 102, 0)');
+          fx.fillStyle = gg;
+          fx.fillRect(0, 0, 64, 64);
+          const t = new THREE.CanvasTexture(fc);
+          t.colorSpace = THREE.SRGBColorSpace;
+          return t;
+        })();
+        _rabbitFlies = new THREE.Group();
+        for (let i = 0; i < 12; i++) {
+          const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: _ffTex, color: 0xffe066, blending: THREE.AdditiveBlending,
+            transparent: true, depthWrite: false, opacity: 0,
+          }));
+          sp.scale.setScalar(0.06 + Math.random() * 0.04);
+          sp.userData = {
+            ox: (Math.random() - 0.5) * 0.7,        // scatter around the rabbit
+            oy: (Math.random() - 0.5) * 0.55 + 0.06, // wrap the body, slight up
+            oz: (Math.random() - 0.5) * 0.7,
+            ph: Math.random() * 6.28,           // desynced bob/flicker phase
+          };
+          _rabbitFlies.add(sp);
+        }
+        _rabbitFlies.visible = false;
+        _rabbitFlies.position.copy(rabbit.position);
+        scene.add(_rabbitFlies);
       },
       undefined,
       (err) => console.error('cute_rabbit.glb failed to load:', err)
@@ -323,7 +428,7 @@ loader.load(
     // The 4 plaques: internal name, displayed label, and neon colour.
     const _sCfg = [
       { name: 'sign-projects', label: 'PROJECTS', color: '#FFD93D' }, // yellow
-      { name: 'sign-about',    label: 'ABOUT',    color: '#F2F2F0' }, // white
+      { name: 'sign-about',    label: 'ABOUT ME', color: '#F2F2F0' }, // white
       { name: 'sign-articles', label: 'ARTICLES', color: '#FF8C42' }, // orange
       { name: 'sign-credits',  label: 'CREDITS',  color: '#7DC85B' }, // green
     ];
@@ -439,6 +544,53 @@ loader.load(
       console.log(`Mesh: ${obj.name}, material: ${obj.material.name}, size: ${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}, center Y: ${center.y.toFixed(2)}`);
     });
 
+    // ----- Round medallion → invisible Darts click-target -----
+    // The medallion is baked into the big merged Juice_Box mesh, so it can't
+    // be picked by mesh name. Instead an invisible sphere proxy sits exactly
+    // over it; the click handler raycasts this proxy to open the Darts game.
+    // Tune live:  dartTarget.position.set(x, y, z); dartTarget.scale.setScalar(s);
+    // (dartTarget.visible = true shows it while tuning) — then re-bake DART_TARGET.
+    {
+      const _dtMat = new THREE.MeshBasicMaterial({
+        color: 0xff4fa8, transparent: true, opacity: 0.35,
+      });
+      _dartTarget = new THREE.Mesh(
+        new THREE.SphereGeometry(DART_TARGET.r, 16, 12), _dtMat
+      );
+      _dartTarget.position.set(DART_TARGET.x, DART_TARGET.y, DART_TARGET.z);
+      _dartTarget.visible = false;        // invisible; raycast still hits it
+      _dartTarget.name = 'dart-target';
+      scene.add(_dartTarget);
+      window.dartTarget = _dartTarget;    // console-tunable, then re-bake
+
+      // Visible additive halo on the medallion: always softly glowing so
+      // it reads as clickable, brighter on hover (see the pointermove).
+      const _dgC = document.createElement('canvas');
+      _dgC.width = _dgC.height = 128;
+      const _dgX = _dgC.getContext('2d');
+      const _dgG = _dgX.createRadialGradient(64, 64, 0, 64, 64, 64);
+      _dgG.addColorStop(0.0, 'rgba(255, 255, 255, 1)');
+      _dgG.addColorStop(0.3, 'rgba(255, 233, 150, 0.85)');
+      _dgG.addColorStop(1.0, 'rgba(255, 217, 61, 0)');
+      _dgX.fillStyle = _dgG;
+      _dgX.fillRect(0, 0, 128, 128);
+      const _dgTex = new THREE.CanvasTexture(_dgC);
+      _dgTex.colorSpace = THREE.SRGBColorSpace;
+      _dartGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: _dgTex,
+        color: new THREE.Color(window.DART_GLOW.color),
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+        opacity: window.DART_GLOW.rest,
+      }));
+      _dartGlow.position.copy(_dartTarget.position);
+      _dartGlow.scale.setScalar(DART_TARGET.r * window.DART_GLOW.scale);
+      _dartGlow.renderOrder = 2;
+      scene.add(_dartGlow);
+      window.dartGlow = _dartGlow;        // console-tunable
+    }
+
     // ----- Recolour a couple of specific model meshes by name -----
     model.traverse((obj) => {
       if (!obj.isMesh) return;
@@ -479,6 +631,13 @@ loader.load(
     // Remember this opening pose so we can fly back to it later.
     _homeCamPos.copy(camera.position);
     _homeTarget.copy(modelCenter);
+    // Cinematic intro: start far BEHIND + above the shop, then sweep in to
+    // this opening pose when the user presses START.
+    _introStartPos.set(
+      modelCenter.x - camDistance * 1.4,   // behind (the front is +X)
+      modelCenter.y + camDistance * 0.95,  // high above
+      modelCenter.z - camDistance * 1.15   // and around the back
+    );
     // About: orbit round to the rear of the shop and dolly toward the base box.
     // Tunable live: window.aboutCamPos / window.aboutCamTarget (Vector3s).
     window.aboutCamPos = new THREE.Vector3(
@@ -583,12 +742,12 @@ loader.load(
     // Alias kept for the lighting code below.
     const center = modelCenter;
 
-    // Auto-rotation off at first; kicks in after 4s of the user just looking.
+    // Locked + still until the user presses START on the intro overlay.
+    // After the intro pan finishes, controls re-enable and auto-rotate
+    // kicks in 4s later (see _beginAfterIntro).
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0.5;
-    setTimeout(() => {
-      controls.autoRotate = true;
-    }, 4000);
+    controls.enabled = false;
 
     // ===== Lighting (created here so it can use the model's bounds) =====
     // Dim purple ambient so nothing is pure black.
@@ -634,12 +793,66 @@ loader.load(
           emissiveMap: oldTexture, // glow follows the star shape, not a square
         });
         obj.material.needsUpdate = true;
+        // Group meshes by star number (body + outline share e.g. "Star001")
+        // and collect them so a hover can light up just that one star.
+        obj.userData.starGroup = (obj.name.match(/^Star\d+/) || [obj.name])[0];
+        _starMeshes.push(obj);
       }
     });
 
-    // Hide the loading indicator once everything above is set up.
-    const loaderEl = document.getElementById('loader');
-    if (loaderEl) loaderEl.style.display = 'none';
+    // ----- Per-star hover glow (additive halo sprites) -----
+    // A soft radial-gradient sprite per star reads as light spilling
+    // OUTWARD (additive blend, always camera-facing) rather than a surface
+    // colour change. Hidden (opacity 0) until that star is hovered.
+    const _glowTex = (() => {
+      const gc = document.createElement('canvas');
+      gc.width = gc.height = 128;
+      const gx = gc.getContext('2d');
+      const g = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      g.addColorStop(0.00, 'rgba(255, 255, 255, 1)');
+      g.addColorStop(0.25, 'rgba(255, 235, 150, 0.8)');
+      g.addColorStop(1.00, 'rgba(255, 224, 102, 0)');
+      gx.fillStyle = g;
+      gx.fillRect(0, 0, 128, 128);
+      const t = new THREE.CanvasTexture(gc);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    // Group the star meshes, then drop one halo sprite at each star's centre.
+    const _byGroup = new Map();
+    _starMeshes.forEach((m) => {
+      const k = m.userData.starGroup;
+      if (!_byGroup.has(k)) _byGroup.set(k, []);
+      _byGroup.get(k).push(m);
+    });
+    _byGroup.forEach((meshes, key) => {
+      const box = new THREE.Box3();
+      meshes.forEach((m, i) => {
+        const b = new THREE.Box3().setFromObject(m);
+        if (i === 0) box.copy(b); else box.union(b);
+      });
+      const c = box.getCenter(new THREE.Vector3());
+      const s = box.getSize(new THREE.Vector3());
+      const base = Math.max(s.x, s.y, s.z) || 0.3;
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: _glowTex,
+        color: new THREE.Color(window.STAR_GLOW.color),
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+      }));
+      spr.position.copy(c);
+      spr.userData.base = base;
+      spr.scale.setScalar(base * window.STAR_GLOW.scale);
+      spr.renderOrder = 2;
+      scene.add(spr);
+      _starGlows.set(key, spr);
+    });
+    window.starGlows = _starGlows; // console: starGlows.get('Star001').material…
+
+    // Scene is fully built — reveal the START button on the intro overlay.
+    _introReady();
   },
   // Progress callback (unused).
   undefined,
@@ -720,6 +933,7 @@ scene.add(fireflies);
 // Reusable vectors so the animation loop doesn't allocate every frame.
 const _homeCamPos = new THREE.Vector3();
 const _homeTarget = new THREE.Vector3();
+const _introStartPos = new THREE.Vector3(); // pulled-back/behind intro pose
 const _tmpTarget = new THREE.Vector3();
 // Holds the active tween, or null when the camera is free.
 let _camAnim = null;
@@ -843,6 +1057,96 @@ if (_cPanel) {
   _cPanel.querySelector('.panel-back').addEventListener('click', closeCreditsPanel);
 }
 
+// ===== Contact panel (dark overlay — opened by the CONTACT ME floor line) =====
+const _ctPanel = document.getElementById('contact-panel');
+
+// Open the Contact panel. No camera flight — the floor line just reveals it.
+function openContactPanel() {
+  if (!_ctPanel) return;
+  _panelOpen = true;
+  _ctPanel.classList.add('open');
+  _ctPanel.setAttribute('aria-hidden', 'false');
+}
+
+// Close it. No flyHome() here — opening it never moved the camera.
+function closeContactPanel() {
+  if (!_ctPanel || !_ctPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  _ctPanel.classList.remove('open');
+  // Drop focus before hiding (browser blocks aria-hidden over focus).
+  if (_ctPanel.contains(document.activeElement)) document.activeElement.blur();
+  _ctPanel.setAttribute('aria-hidden', 'true');
+}
+
+// Wire the Contact panel's Back button.
+if (_ctPanel) {
+  _ctPanel.querySelector('.panel-back').addEventListener('click', closeContactPanel);
+}
+
+// ===== Darts panel (full-bleed mini-game, opened by the round medallion) =====
+const _dPanel = document.getElementById('darts-panel');
+let _darts = null; // game instance, built lazily on first open
+
+// Open the Darts panel and (re)start a fresh game. No camera flight.
+function openDartsPanel() {
+  if (!_dPanel) return;
+  _panelOpen = true;
+  _dPanel.classList.add('open');
+  _dPanel.setAttribute('aria-hidden', 'false');
+  if (!_darts) _darts = createDartsGame(_dPanel);
+  _darts.start();
+}
+
+// Close the Darts panel and stop the game. No flyHome() — opening it never
+// moved the camera.
+function closeDartsPanel() {
+  if (!_dPanel || !_dPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  if (_darts) _darts.stop();
+  _dPanel.classList.remove('open');
+  if (_dPanel.contains(document.activeElement)) document.activeElement.blur();
+  _dPanel.setAttribute('aria-hidden', 'true');
+}
+
+// Wire the Darts panel's Back button. openDartsPanel is also exposed to the
+// console so the game can be tested before the medallion mesh name is baked.
+if (_dPanel) {
+  _dPanel.querySelector('.panel-back').addEventListener('click', closeDartsPanel);
+}
+window.openDartsPanel = openDartsPanel;
+
+// ===== Shooter panel (full-bleed Carrot Blaster, opened by a star click) =====
+const _shPanel = document.getElementById('shooter-panel');
+let _shooter = null; // game instance, built lazily on first open
+
+// Open the Shooter panel and (re)start a fresh game. No camera flight.
+function openShooterPanel() {
+  if (!_shPanel) return;
+  _panelOpen = true;
+  _shPanel.classList.add('open');
+  _shPanel.setAttribute('aria-hidden', 'false');
+  if (!_shooter) _shooter = createShooterGame(_shPanel);
+  _shooter.start();
+}
+
+// Close the Shooter panel and stop the game. No flyHome() — opening it
+// never moved the camera.
+function closeShooterPanel() {
+  if (!_shPanel || !_shPanel.classList.contains('open')) return;
+  _panelOpen = false;
+  if (_shooter) _shooter.stop();
+  _shPanel.classList.remove('open');
+  if (_shPanel.contains(document.activeElement)) document.activeElement.blur();
+  _shPanel.setAttribute('aria-hidden', 'true');
+}
+
+// Wire the Shooter panel's Back button. Also exposed to the console so the
+// game can be opened/tested directly.
+if (_shPanel) {
+  _shPanel.querySelector('.panel-back').addEventListener('click', closeShooterPanel);
+}
+window.openShooterPanel = openShooterPanel;
+
 // ===== Plaque hover + click (raycaster) =====
 // A raycaster shoots a ray from the camera through the cursor into the scene.
 const _raycaster = new THREE.Raycaster();
@@ -850,7 +1154,24 @@ const _raycaster = new THREE.Raycaster();
 const _pointer = new THREE.Vector2();
 // The plaque currently under the cursor (so we can revert it on mouse-out).
 let _hoveredPlaque = null;
+// Invisible click-target over the round medallion; a hit opens Darts.
+let _dartTarget = null;
+let _dartGlow = null;      // additive halo sprite on the dart medallion
+let _dartHot = false;      // pointer currently over the medallion
+// Dart medallion glow — tweak live then re-bake. rest = always-on glow,
+// hover = brighter on hover, scale = halo size vs the target radius.
+window.DART_GLOW = { color: '#FFD93D', scale: 3.4, rest: 0.4, hover: 0.95 };
+// Star meshes (filled on model load) + one additive glow sprite per star.
+let _starMeshes = [];
+const _starGlows = new Map(); // star group key -> glow Sprite
 window.HOVER_COLOR = '#FF4FA8'; // contrasting neon highlight — tunable in console
+// Hover-glow look — tweak live then re-bake. color = halo tint, scale =
+// halo size vs the star, opacity = peak brightness of the spill.
+window.STAR_GLOW = { color: '#FFE066', scale: 1.2, opacity: 0.95 };
+// The added cute_rabbit prop's meshes + how bright it goes on hover.
+let _rabbitMeshes = [];
+// rest = the soft glow it always has; intensity = extra added on hover.
+window.RABBIT_HOVER = { color: '#FFE9B0', intensity: 0.9, lighten: 0.4, rest: 0.35 };
 
 // Return the plaque under the given mouse event, or null.
 function _plaqueAtEvent(event) {
@@ -893,28 +1214,182 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   }
 });
 
+// Hover a star → ONLY that star's halo lights up (additive glow sprite),
+// reverting when the pointer leaves it. Separate from the plaque hover so
+// that logic stays untouched; both raycast sets are tiny.
+let _hotStar = null;
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!_starMeshes.length) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_pointer, camera);
+  const hit = _raycaster.intersectObjects(_starMeshes, false)[0];
+  const grp = hit ? hit.object.userData.starGroup : null;
+  if (grp === _hotStar) return;            // nothing changed
+  if (_hotStar) {                          // dim the previously-lit star
+    const prev = _starGlows.get(_hotStar);
+    if (prev) prev.material.opacity = 0;
+  }
+  if (grp) {                               // light up the hovered star
+    const spr = _starGlows.get(grp);
+    if (spr) {
+      // Re-read window.STAR_GLOW so console tweaks apply without a reload.
+      spr.material.color.set(window.STAR_GLOW.color);
+      spr.scale.setScalar(spr.userData.base * window.STAR_GLOW.scale);
+      spr.material.opacity = window.STAR_GLOW.opacity;
+    }
+  }
+  _hotStar = grp;
+});
+
+// Hover the dart medallion → its halo brightens, back to the soft resting
+// glow on mouse-out. Tiny single-object raycast.
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!_dartTarget || !_dartGlow) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_pointer, camera);
+  const over = _raycaster.intersectObject(_dartTarget, true).length > 0;
+  if (over === _dartHot) return;          // nothing changed
+  _dartHot = over;
+  // Re-read window.DART_GLOW so console tweaks apply without a reload.
+  _dartGlow.material.color.set(window.DART_GLOW.color);
+  _dartGlow.scale.setScalar(DART_TARGET.r * window.DART_GLOW.scale);
+  _dartGlow.material.opacity =
+    over ? window.DART_GLOW.hover : window.DART_GLOW.rest;
+});
+
+// Hover the cute_rabbit prop → it brightens (emissive lift, with an unlit
+// colour-lighten fallback), reverting on mouse-out. Its own pass so it
+// stays independent of the plaque/star hover logic.
+let _rabbitHot = false;
+let _rabbitFlies = null;   // hover firefly swarm Group (built on rabbit load)
+let _rabbitFlyA = 0;       // eased 0..1 visibility for the swarm
+const _ffBox = new THREE.Box3();    // reused: rabbit world-bounds for centring
+const _ffCtr = new THREE.Vector3();
+function _setRabbitGlow(on) {
+  _rabbitMeshes.forEach((o) => {
+    const m = o.material;
+    // Lighten the diffuse toward white — this only ever brightens.
+    if (m.color && m.userData._baseCol) {
+      if (on) m.color.copy(m.userData._baseCol)
+        .lerp(new THREE.Color('#ffffff'), window.RABBIT_HOVER.lighten);
+      else m.color.copy(m.userData._baseCol);
+    }
+    // ADD glow on top of the base emissive (intensity = base + boost) so a
+    // rabbit that's already self-lit can never end up dimmer than at rest.
+    if (m.emissive && m.userData._baseEmis) {
+      // Always a soft resting glow (rest); hover adds more on top of the
+      // base, so a self-lit rabbit can never end up dimmer than at rest.
+      const add = on ? window.RABBIT_HOVER.intensity : window.RABBIT_HOVER.rest;
+      m.emissive.copy(m.userData._baseEmis)
+        .lerp(new THREE.Color(window.RABBIT_HOVER.color), on ? 0.7 : 0.5);
+      m.emissiveIntensity = m.userData._baseEI + add;
+    }
+  });
+}
+// Per-frame: ease the hover firefly swarm in/out and drift+flicker each
+// mote. Cheap; guarded until the rabbit (and its swarm) have loaded.
+function _updateRabbitFlies() {
+  if (!_rabbitFlies) return;
+  const target = _rabbitHot ? 1 : 0;
+  _rabbitFlyA += (target - _rabbitFlyA) * 0.08;     // smooth fade in/out
+  if (_rabbitFlyA < 0.01 && target === 0) { _rabbitFlies.visible = false; return; }
+  _rabbitFlies.visible = true;
+  // Centre the swarm on the rabbit's VISIBLE body (its bbox centre), not
+  // its model origin — the glb's geometry is offset from its pivot, which
+  // made the motes bunch to one side. Also follows console position tuning.
+  if (window.rabbit) {
+    _ffBox.setFromObject(window.rabbit);
+    _ffBox.getCenter(_ffCtr);
+    _rabbitFlies.position.copy(_ffCtr);
+  }
+  const t = performance.now() * 0.001;
+  _rabbitFlies.children.forEach((sp) => {
+    const u = sp.userData;
+    sp.position.set(
+      u.ox + Math.sin(t * 0.8 + u.ph) * 0.06,
+      u.oy + Math.sin(t * 1.3 + u.ph) * 0.05,
+      u.oz + Math.cos(t * 0.7 + u.ph) * 0.06
+    );
+    const fl = 0.45 + 0.55 * Math.sin(t * 3 + u.ph); // gentle flicker
+    sp.material.opacity = _rabbitFlyA * Math.max(0, fl);
+  });
+}
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!_rabbitMeshes.length) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  _raycaster.setFromCamera(_pointer, camera);
+  const over = _raycaster.intersectObjects(_rabbitMeshes, true).length > 0;
+  if (over === _rabbitHot) return;          // nothing changed
+  _rabbitHot = over;
+  _setRabbitGlow(over);
+});
+
+// Fly the camera to the rear base box (two-phase) then open the About
+// panel. Shared by the ABOUT ME plaque AND the about-label sticker.
+function _flyToAbout() {
+  controls.enabled = false;       // lock controls during the animation
+  controls.autoRotate = false;
+  if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
+  renderer.domElement.style.cursor = 'default';
+  // Phase 1: orbit around to the rear base box.
+  flyCamera(window.aboutCamPos, window.aboutCamTarget, 1500, () => {
+    // Phase 2: short dive deeper into the box, then reveal the panel.
+    const innerPos = new THREE.Vector3().lerpVectors(
+      window.aboutCamPos, window.aboutCamTarget, window.aboutDiveLerp
+    );
+    flyCamera(innerPos, window.aboutCamTarget, 800, openAboutPanel);
+  });
+}
+
 // On click: if a plaque was hit, run its camera flight + open its panel.
 renderer.domElement.addEventListener('click', (event) => {
   // Ignore clicks while a panel is open or the camera is mid-flight.
   if (_panelOpen || _camAnim) return;
+  // The round medallion isn't a plaque (different material type, so it's
+  // raycast separately here) — a hit on it opens the Darts game.
+  if (_dartTarget) {
+    const r = renderer.domElement.getBoundingClientRect();
+    _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+    _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+    _raycaster.setFromCamera(_pointer, camera);
+    if (_raycaster.intersectObject(_dartTarget, true).length) {
+      openDartsPanel();
+      return;
+    }
+  }
+  // Clicking any star opens the Carrot Blaster shooter.
+  if (_starMeshes.length) {
+    const r = renderer.domElement.getBoundingClientRect();
+    _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+    _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+    _raycaster.setFromCamera(_pointer, camera);
+    if (_raycaster.intersectObjects(_starMeshes, false).length) {
+      openShooterPanel();
+      return;
+    }
+  }
+  // The about-label sticker on the rear box also opens the About panel
+  // (same camera flow as the ABOUT ME plaque).
+  if (window.aboutLabel && window.aboutLabel.visible) {
+    const r = renderer.domElement.getBoundingClientRect();
+    _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+    _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+    _raycaster.setFromCamera(_pointer, camera);
+    if (_raycaster.intersectObject(window.aboutLabel, true).length) {
+      _flyToAbout();
+      return;
+    }
+  }
   const p = _plaqueAtEvent(event);
   if (!p) return;
   console.log('Plaque clicked:', p.name);
-  if (p.name === 'sign-about') {
-    // Lock the controls so the user can't fight the camera animation.
-    controls.enabled = false;
-    controls.autoRotate = false;
-    if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
-    renderer.domElement.style.cursor = 'default';
-    // Phase 1: orbit around to the rear base box.
-    flyCamera(window.aboutCamPos, window.aboutCamTarget, 1500, () => {
-      // Phase 2: short dive deeper into the box, then reveal the panel.
-      const innerPos = new THREE.Vector3().lerpVectors(
-        window.aboutCamPos, window.aboutCamTarget, window.aboutDiveLerp
-      );
-      flyCamera(innerPos, window.aboutCamTarget, 800, openAboutPanel);
-    });
-  }
+  if (p.name === 'sign-about') _flyToAbout();
   if (p.name === 'sign-projects') {
     // Same pattern as About, but flying to the hanging menu.
     controls.enabled = false;
@@ -958,6 +1433,15 @@ renderer.domElement.addEventListener('click', (event) => {
       flyCamera(innerPos, window.creditsCamTarget, 800, openCreditsPanel);
     });
   }
+  if (p.name === 'floor-fullstack' || p.name === 'floor-researcher') {
+    // Résumé lines: open the PDF in a new tab (noopener,noreferrer so the
+    // opened page can't reach back via window.opener).
+    window.open('/Azka_Resume_18_1.pdf', '_blank', 'noopener,noreferrer');
+  }
+  if (p.name === 'floor-contact') {
+    // CONTACT ME: open the dark Contact overlay (no camera move).
+    openContactPanel();
+  }
 });
 
 // ===== Keep the render in sync with the window size =====
@@ -968,6 +1452,50 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();       // apply the new aspect
   renderer.setSize(width, height);       // resize the canvas
 });
+
+// ===== Intro overlay: loading → START → cinematic camera pan =====
+const _introEl = document.getElementById('intro');
+const _introPctEl = _introEl && _introEl.querySelector('.intro-pct');
+const _introStartBtn = _introEl && _introEl.querySelector('.intro-start');
+let _introPct = 0, _introDone = false;
+
+// Climb a friendly fake % until the scene reports ready (real download
+// time is unknown — Content-Length isn't guaranteed — so ease toward ~92).
+const _introTick = setInterval(() => {
+  if (_introDone) return;
+  _introPct = Math.min(92, _introPct + Math.random() * 7 + 2);
+  if (_introPctEl) _introPctEl.textContent = Math.round(_introPct);
+}, 180);
+
+// Called from the model success callback once the scene is built.
+function _introReady() {
+  _introDone = true;
+  clearInterval(_introTick);
+  if (_introPctEl) _introPctEl.textContent = '100';
+  if (_introEl) _introEl.classList.add('ready'); // CSS swaps loader → START
+}
+
+// After the intro pan lands on the opening pose: hand control back and let
+// auto-rotate kick in after a short idle (the original 4s behaviour).
+function _beginAfterIntro() {
+  controls.enabled = true;
+  setTimeout(() => { controls.autoRotate = true; }, 4000);
+}
+
+// START → fade the overlay out, jump the camera far behind/above, then
+// sweep it in to the opening pose.
+if (_introStartBtn) {
+  _introStartBtn.addEventListener('click', () => {
+    if (_introEl) {
+      _introEl.classList.add('hidden');
+      setTimeout(() => { _introEl.style.display = 'none'; }, 800);
+    }
+    camera.position.copy(_introStartPos);
+    controls.target.copy(_homeTarget);
+    camera.lookAt(_homeTarget);
+    flyCamera(_homeCamPos, _homeTarget, 2600, _beginAfterIntro);
+  });
+}
 
 // ===== Animation loop (runs ~60x per second) =====
 function animate() {
@@ -988,6 +1516,8 @@ function animate() {
   }
   // Advance the firefly shader's clock so they keep moving/flickering.
   fireflyMaterial.uniforms.uTime.value = performance.now() * 0.001;
+  // Fade/animate the rabbit's hover firefly swarm.
+  _updateRabbitFlies();
   // Render through the post-processing chain (RenderPass + bloom).
   composer.render();
 }

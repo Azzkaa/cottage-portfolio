@@ -18,6 +18,73 @@ body > canvas {
   height: 100vh !important;
 }
 
+/* ===== Intro: loading → START → (camera pans in) ===== */
+#intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #060309;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Quicksand", system-ui, sans-serif;
+  transition: opacity 0.7s ease;
+}
+#intro.hidden { opacity: 0; pointer-events: none; }
+.intro-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+.intro-icon {
+  width: 82px;
+  height: 82px;
+  animation: introBob 2.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(255, 224, 102, 0.35));
+}
+@keyframes introBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.intro-load {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(244, 238, 240, 0.66);
+}
+.intro-start {
+  display: none;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 46px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  padding: 10px 22px 10px 30px;
+  color: #f4eef0;
+  cursor: pointer;
+  transition: color 0.25s ease, text-shadow 0.25s ease, transform 0.2s ease;
+  animation: introPulse 2.6s ease-in-out infinite;
+}
+.intro-start:hover {
+  color: #ffd93d;
+  text-shadow: 0 0 26px rgba(255, 159, 178, 0.8);
+  transform: scale(1.06);
+}
+@keyframes introPulse {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 1; }
+}
+/* Loading finished → hide loader bits, reveal START. */
+#intro.ready .intro-load,
+#intro.ready .intro-icon { display: none; }
+#intro.ready .intro-start { display: block; }
+@media (prefers-reduced-motion: reduce) {
+  .intro-icon, .intro-start { animation: none; }
+}
+
 /* ===== About panel (whimsical wine glass) ===== */
 .panel {
   position: fixed;
@@ -154,6 +221,19 @@ body > canvas {
 .panel-view p { margin: 0 0 12px; line-height: 1.7; color: rgba(244, 238, 240, 0.9); }
 .panel-view .lead { font-size: 17px; color: #fff; }
 
+/* Portrait in the About Me tab: round, gold-rimmed, soft pink glow to match
+   the panel's neon palette. Floated so the intro text wraps beside it. */
+.about-photo {
+  float: right;
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin: 4px 0 14px 22px;
+  border: 3px solid #ffd93d;
+  box-shadow: 0 0 24px rgba(255, 159, 178, 0.5);
+}
+
 .facts { list-style: none; padding: 0; margin: 0; }
 .facts li {
   padding: 11px 0 11px 24px;
@@ -177,6 +257,21 @@ body > canvas {
   font-weight: 600;
   color: rgba(255, 159, 178, 0.85);
   margin-bottom: 6px;
+}
+/* Achievement bullets inside an Experience entry (kept theme-consistent
+   with .facts: no native discs, pink star markers, comfy line-height). */
+.exp-item ul { list-style: none; padding: 0; margin: 6px 0 0; }
+.exp-item li {
+  position: relative;
+  padding: 3px 0 3px 20px;
+  line-height: 1.55;
+  color: rgba(244, 238, 240, 0.9);
+}
+.exp-item li::before {
+  content: "\2726";
+  position: absolute;
+  left: 0;
+  color: #ff9fb2;
 }
 
 /* ===== Cute white mascots ===== */
@@ -244,6 +339,8 @@ body > canvas {
 @media (max-width: 560px) {
   .panel-inner { padding: 24px 22px 30px; max-height: 88vh; }
   .panel-view h1 { font-size: 23px; }
+  /* On phones, centre the portrait above the text instead of floating it. */
+  .about-photo { float: none; display: block; margin: 0 auto 16px; width: 118px; height: 118px; }
   .mascot--float { display: none; }
 }
 
@@ -298,6 +395,75 @@ body > canvas {
   background: #ffe2c4;
   color: #c25e1c;
 }
+/* Project screenshot: full-width banner atop each card, cream-backed so
+   PNGs with transparency still read on the light panel. */
+.proj-shot {
+  display: block;
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(255, 140, 66, 0.3);
+  background: #fff;
+}
+/* "View on GitHub" pill — orange to match the light panel's accent. */
+.proj-link {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #fff;
+  background: #ff8c42;
+  padding: 8px 16px;
+  border-radius: 999px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.proj-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 140, 66, 0.42);
+}
+
+/* ===== Contact panel ===== */
+/* Dark theme (reuses .panel/.panel-inner). 2-up button grid, 1-up on phones. */
+.contact-links {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 26px;
+}
+.contact-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  text-decoration: none;
+  color: #f4eef0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(255, 159, 178, 0.28);
+  font-weight: 600;
+  transition: transform 0.15s ease, background 0.2s ease,
+    border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.contact-btn svg {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  color: #ff9fb2;
+  transition: color 0.2s ease;
+}
+.contact-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 159, 178, 0.16);
+  border-color: #ffd93d;
+  box-shadow: 0 8px 22px rgba(255, 79, 168, 0.28);
+}
+.contact-btn:hover svg { color: #ffd93d; }
+@media (max-width: 560px) {
+  .contact-links { grid-template-columns: 1fr; }
+}
 
 /* ===== Credits panel = full-bleed Star Snake game ===== */
 /* Let the game frame define the size; no floating card / sparkles. */
@@ -344,6 +510,84 @@ body > canvas {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 .snake-frame .panel-back:hover {
+  text-shadow: 0 0 12px rgba(255, 184, 120, 0.85);
+}
+
+/* Darts mini-game frame — same full-bleed treatment as the Snake frame. */
+.darts-frame {
+  position: relative;
+  width: min(94vw, 880px);
+  height: min(86vh, 600px);
+  border-radius: 26px;
+  overflow: hidden;
+  background: #100309;
+  border: 1.5px solid rgba(255, 140, 66, 0.35);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.6),
+    0 0 50px rgba(255, 140, 66, 0.18);
+  transform: translateY(26px) scale(0.97);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.panel.open .panel-stage .darts-frame { transform: translateY(0) scale(1); }
+
+.darts-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* we handle taps ourselves — no scroll/zoom */
+}
+
+.darts-frame .panel-back {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  z-index: 2;
+  margin: 0;
+  color: #ffd0a0;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.darts-frame .panel-back:hover {
+  text-shadow: 0 0 12px rgba(255, 184, 120, 0.85);
+}
+
+/* Carrot Blaster shooter frame — same full-bleed treatment. */
+.shooter-frame {
+  position: relative;
+  width: min(94vw, 880px);
+  height: min(86vh, 600px);
+  border-radius: 26px;
+  overflow: hidden;
+  background: #100309;
+  border: 1.5px solid rgba(255, 140, 66, 0.35);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.6),
+    0 0 50px rgba(255, 140, 66, 0.18);
+  transform: translateY(26px) scale(0.97);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.panel.open .panel-stage .shooter-frame { transform: translateY(0) scale(1); }
+
+.shooter-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* we handle taps/drags ourselves — no scroll/zoom */
+}
+
+.shooter-frame .panel-back {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  z-index: 2;
+  margin: 0;
+  color: #ffd0a0;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+.shooter-frame .panel-back:hover {
   text-shadow: 0 0 12px rgba(255, 184, 120, 0.85);
 }
 
