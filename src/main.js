@@ -1672,7 +1672,7 @@ function _beginAfterIntro() {
 // require before they'll allow audio to play.
 const _bgm = new Audio(`${ASSET}backgr0und.mpeg`);
 _bgm.loop = true;
-_bgm.volume = 0.06;            // very low — it sits quietly under everything
+_bgm.volume = 0.5;             // prominent — author wants it clearly audible
 const _startSfx = new Audio(`${ASSET}start.mpeg`);
 _startSfx.volume = 0.6;
 // Soft UI tick shared by the star / ground-rabbit / dart-medallion hovers.
@@ -1709,7 +1709,7 @@ document.addEventListener('click', (e) => {
 // Camera-move whoosh — plays on every scripted fly (zoom in/out, dive,
 // flyHome, the START sweep). Wired into flyCamera() so it's a single hook.
 const _whooshSfx = new Audio(`${ASSET}wh00sh.mpeg`);
-_whooshSfx.volume = 0.25;
+_whooshSfx.volume = 0.1;
 let _lastWhooshSfx = 0;
 function _playWhooshSfx() {
   const now = performance.now();
@@ -1726,16 +1726,12 @@ if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
     _startSfx.currentTime = 0;
     _startSfx.play().catch(() => {});
-    // Mobile blocks a play() that isn't inside the tap gesture, so the
-    // old deferred play() never started bgm on phones. Start it muted
-    // NOW (allowed within this gesture, loops silently), then unmute
-    // after 1s — same "music fades in ~1s later" feel, but mobile-safe.
-    _bgm.muted = true;
-    _bgm.play().then(() => {
-      setTimeout(() => { _bgm.muted = false; }, 1000);
-    }).catch(() => {
-      setTimeout(() => { _bgm.play().catch(() => {}); }, 1000);
-    });
+    // Start the looping music synchronously INSIDE this tap. iOS won't
+    // resume a deferred play() or unmute a muted element outside the
+    // gesture (that's why the music was silent on phones) — so play it
+    // unmuted right here, alongside the chime.
+    _bgm.currentTime = 0;
+    _bgm.play().catch(() => {});
     if (_introEl) {
       _introEl.classList.add('hidden');
       setTimeout(() => { _introEl.style.display = 'none'; }, 800);

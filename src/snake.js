@@ -484,10 +484,25 @@ export function createSnakeGame(rootEl) {
         return [cx(s.x) + (p.x - s.x) * cell * f,
                 cy(s.y) + (p.y - s.y) * cell * f];
       });
+      // Trace a SMOOTH path: each cell centre is a quadratic control
+      // point and the curve passes through the midpoints, so 90° turns
+      // become soft rounded bends instead of the hard edges that showed
+      // before. (Standard polyline-smoothing.)
       const trace = () => {
+        const n = pts.length;
         ctx.beginPath();
         ctx.moveTo(pts[0][0], pts[0][1]);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        if (n < 3) {
+          for (let i = 1; i < n; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+          return;
+        }
+        let i;
+        for (i = 1; i < n - 2; i++) {
+          const xc = (pts[i][0] + pts[i + 1][0]) / 2;
+          const yc = (pts[i][1] + pts[i + 1][1]) / 2;
+          ctx.quadraticCurveTo(pts[i][0], pts[i][1], xc, yc);
+        }
+        ctx.quadraticCurveTo(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
       };
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
