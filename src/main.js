@@ -1668,14 +1668,12 @@ function _beginAfterIntro() {
   setTimeout(() => { controls.autoRotate = true; }, 4000);
 }
 
-// Audio: soft looping background music + a one-shot START chime. Both are
-// kicked off from the START click — a user gesture, which is what browsers
-// require before they'll allow audio to play.
-const _bgm = new Audio(`${ASSET}backgr0und.mpeg`);
-_bgm.loop = true;
-_bgm.volume = 0.5;             // prominent — author wants it clearly audible
-const _startSfx = new Audio(`${ASSET}start.mpeg`);
-_startSfx.volume = 0.6;
+// Audio: looping background music + a one-shot START chime. ALL audio
+// (bgm, chime, SFX) goes through the Web Audio API — see the bgm/chime
+// setup just below the SFX. (An <audio> element refused to play the
+// .mpeg files on iOS because GitHub Pages serves them with a MIME the
+// element rejects; decodeAudioData decodes by content, so it's immune.)
+//
 // One-shot UI SFX use the Web Audio API, NOT <audio>. HTMLAudioElement
 // has a long, variable start latency on every play() (it does a seek
 // back to 0 then decode), which made clicks sound ~a second late,
@@ -1686,14 +1684,16 @@ const _actx = _AC ? new _AC() : null;
 function _resumeAudio() {
   if (_actx && _actx.state === 'suspended') _actx.resume().catch(() => {});
 }
-// Decode a clip once; `.buf` fills in when ready (the clips are tiny).
-function _loadSfx(url) {
+// Decode a clip once; `.buf` fills in when ready. onReady (optional)
+// fires after decode — used so bgm can start the instant it's decoded
+// if START was already pressed.
+function _loadSfx(url, onReady) {
   const slot = { buf: null };
   if (_actx) {
     fetch(url)
       .then((r) => r.arrayBuffer())
       .then((ab) => _actx.decodeAudioData(ab,
-        (b) => { slot.buf = b; }, () => {}))
+        (b) => { slot.buf = b; if (onReady) onReady(); }, () => {}))
       .catch(() => {});
   }
   return slot;
@@ -1737,20 +1737,43 @@ const _whooshBuf = _loadSfx(`${ASSET}wh00sh.mpeg`);
 const _whooshRef = { t: 0 };
 function _playWhooshSfx() { _oneShot(_whooshBuf, 0.1, _whooshRef, 120); }
 
+// One-shot START chime (was an <audio> element; now Web Audio so the
+// .mpeg MIME on GitHub Pages can't block it on iOS).
+const _startBuf = _loadSfx(`${ASSET}start.mpeg`);
+const _startRef = { t: 0 };
+function _playStartSfx() { _oneShot(_startBuf, 0.6, _startRef, 0); }
+
+// Looping background music via Web Audio (a looping AudioBufferSource
+// through a gain node). If START is pressed before the ~833 kB clip has
+// finished decoding, _bgmWantsPlay defers the start to the load's
+// onReady. Idempotent via _bgmStarted so it can't double up.
+let _bgmStarted = false;
+let _bgmWantsPlay = false;
+const _bgmBuf = _loadSfx(`${ASSET}backgr0und.mpeg`, () => {
+  if (_bgmWantsPlay) _startBgm();
+});
+function _startBgm() {
+  if (!_actx || _bgmStarted) return;
+  if (!_bgmBuf.buf) { _bgmWantsPlay = true; return; } // not decoded yet
+  _bgmStarted = true;
+  _resumeAudio();
+  const src = _actx.createBufferSource();
+  src.buffer = _bgmBuf.buf;
+  src.loop = true;
+  const g = _actx.createGain();
+  g.gain.value = 0.5;            // prominent — author wants it clearly audible
+  src.connect(g).connect(_actx.destination);
+  src.start();
+}
+
 // START → play the chime, fade the overlay out, jump the camera far
 // behind/above, then sweep it in to the opening pose. This tap is also
 // where the Web Audio context is unlocked and the looping music starts.
 if (_introStartBtn) {
   _introStartBtn.addEventListener('click', () => {
-    _resumeAudio();              // unlock the Web Audio context (SFX)
-    _startSfx.currentTime = 0;
-    _startSfx.play().catch(() => {});
-    // Start the looping music synchronously INSIDE this tap. iOS won't
-    // resume a deferred play() or unmute a muted element outside the
-    // gesture (that's why the music was silent on phones) — so play it
-    // unmuted right here, alongside the chime.
-    _bgm.currentTime = 0;
-    _bgm.play().catch(() => {});
+    _resumeAudio();              // unlock the Web Audio context
+    _playStartSfx();             // one-shot chime
+    _startBgm();                 // looping music (defers if still decoding)
     if (_introEl) {
       _introEl.classList.add('hidden');
       setTimeout(() => { _introEl.style.display = 'none'; }, 800);
