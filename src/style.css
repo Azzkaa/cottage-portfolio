@@ -630,6 +630,100 @@ body > canvas {
   text-shadow: 0 0 12px rgba(255, 184, 120, 0.85);
 }
 
+/* ===== In-shop bunny welcome speech bubble ===== */
+.bunny-speech {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 11vh 5vw 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0.3s;
+}
+.bunny-speech.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto; /* a click anywhere dismisses (handled in JS) */
+}
+.bunny-speech__bubble {
+  position: relative;
+  max-width: min(86vw, 430px);
+  padding: 26px 30px 24px;
+  text-align: center;
+  background: linear-gradient(180deg, #fff8ee 0%, #ffe9f3 100%);
+  border: 2px solid #ffc6de;
+  border-radius: 28px;
+  box-shadow:
+    0 18px 50px rgba(61, 26, 46, 0.45),
+    0 0 26px rgba(255, 79, 168, 0.28);
+  transform: translateY(-14px) scale(0.85);
+  transition: transform 0.45s cubic-bezier(0.22, 1.4, 0.4, 1);
+}
+.bunny-speech.show .bunny-speech__bubble {
+  transform: translateY(0) scale(1);
+}
+/* little tail pointing down toward the scene */
+.bunny-speech__bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -16px;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  background: #ffe9f3;
+  border-right: 2px solid #ffc6de;
+  border-bottom: 2px solid #ffc6de;
+  border-radius: 0 0 8px 0;
+  transform: rotate(45deg);
+}
+.bunny-speech__pet {
+  width: 62px;
+  height: 62px;
+  display: block;
+  margin: 0 auto 8px;
+  animation: bunnyBob 2.4s ease-in-out infinite;
+}
+@keyframes bunnyBob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+.bunny-speech__text {
+  margin: 0 0 18px;
+  font-family: "Quicksand", system-ui, sans-serif;
+  font-size: 1.06rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #5a2342;
+}
+.bunny-speech__text strong { color: #ff4fa8; font-weight: 800; }
+.bunny-speech__text em {
+  font-style: normal;
+  color: #c0349a;
+  text-shadow: 0 0 10px rgba(255, 79, 168, 0.35);
+}
+.bunny-speech__close {
+  font-family: "Quicksand", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 0.98rem;
+  color: #fff;
+  background: linear-gradient(180deg, #ff7ec0 0%, #ff4fa8 100%);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 26px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(255, 79, 168, 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.bunny-speech__close:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 12px 24px rgba(255, 79, 168, 0.55);
+}
+
 /* On-screen D-pad: overlaid bottom-centre, touch devices only. */
 .snake-dpad {
   position: absolute;

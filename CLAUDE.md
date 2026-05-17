@@ -33,6 +33,10 @@ Beyond the plaques, much of the scene is now interactive:
 - Clicking **any star** opens the **Carrot Blaster** mini-game.
 - Clicking the **ground rabbit** opens the **Bunny Hop** pixel-art endless
   runner.
+- Clicking the **bunny inside the shop** zooms the camera in and pops a cute
+  **welcome speech bubble** (`#bunny-speech`); a click anywhere on it flies
+  the camera home. The bunny isn't its own mesh, so it uses an invisible
+  proxy (`window.bunnyTarget`, baked `BUNNY_TARGET`) like the medallion.
 - Stars, the dart medallion, and the ground rabbit **glow on hover** (plus a
   soft hover tick sound); the rabbit also has a resting glow and spawns a
   **firefly swarm** on hover.
@@ -185,15 +189,19 @@ gone):
 `aboutCamTarget`, `aboutDiveLerp`, `projectsCamPos`, `projectsCamTarget`,
 `creditsCamPos`, `creditsCamTarget`, `flyHome()`, `floorLines[]`, `dartTarget`,
 `dartGlow`, `starGlows`, `STAR_GLOW`, `DART_GLOW`, `RABBIT_HOVER`,
-`openDartsPanel()`, `openShooterPanel()`, `openRunnerPanel()`
+`openDartsPanel()`, `openShooterPanel()`, `openRunnerPanel()`, `bunnyTarget`,
+`BUNNY_ZOOM`, `captureBunny()`
 
 > **Still starting guesses — not yet baked:** `floorLines[i].position` (the 3
 > clickable floor lines), `dartTarget.position`/`.scale` (medallion hotspot;
 > move `dartGlow` to match or re-bake together), the intro pose/duration, and
 > `creditsCamPos`/`creditsCamTarget`. `STAR_GLOW.scale` is baked to `1.2`.
+> `BUNNY_TARGET` **is baked** (captured via `captureBunny()`).
 
 Workflow: tune in the browser console, then ask the assistant to hardcode the
-readback as plain absolute literals.
+readback as plain absolute literals. For un-pickable painted spots, run
+`captureBunny()` then click the spot — it logs a ready-to-bake literal and
+snaps the (now visible) proxy onto the hit point to confirm.
 
 ## Assets added
 

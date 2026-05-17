@@ -24,6 +24,11 @@ import { createRunnerGame } from './runner.js';
 // window.dartTarget in the console, then re-bake these numbers.
 const DART_TARGET = { x: 0.672, y: 1.787, z: -0.476, r: 0.14 };
 
+// Baked world position + radius of the IN-SHOP bunny's click-target,
+// captured via captureBunny() in the console. Re-tune with window.bunnyTarget
+// (or re-run captureBunny()), then re-bake these numbers.
+const BUNNY_TARGET = { x: 0.501, y: 0.796, z: 0.369, r: 0.28 };
+
 // The scene is the root container holding every 3D object, light and camera.
 const scene = new THREE.Scene();
 // Fog fades distant geometry to a deep wine colour, adding depth.
@@ -591,6 +596,30 @@ loader.load(
       _dartGlow.renderOrder = 2;
       scene.add(_dartGlow);
       window.dartGlow = _dartGlow;        // console-tunable
+    }
+
+    // ----- In-shop bunny → invisible click-target (zoom + speech bubble) ---
+    // Same story as the medallion: the shop's bunny is painted into the
+    // merged geometry, so it can't be picked by name. An invisible sphere
+    // proxy sits over it; the click handler raycasts it.
+    // Tune live: bunnyTarget.position.set(x,y,z); bunnyTarget.scale.setScalar(s);
+    // (bunnyTarget.visible = true to see it) — then re-bake BUNNY_TARGET.
+    {
+      _bunnyTarget = new THREE.Mesh(
+        new THREE.SphereGeometry(BUNNY_TARGET.r, 16, 12),
+        new THREE.MeshBasicMaterial({
+          color: 0xffc6de, transparent: true, opacity: 0.35,
+        })
+      );
+      _bunnyTarget.position.set(
+        BUNNY_TARGET.x, BUNNY_TARGET.y, BUNNY_TARGET.z
+      );
+      _bunnyTarget.visible = false;       // invisible; raycast still hits it
+      _bunnyTarget.name = 'bunny-target';
+      scene.add(_bunnyTarget);
+      window.bunnyTarget = _bunnyTarget;  // console-tunable, then re-bake
+      // How close the camera ends up from the bunny on click (world units).
+      window.BUNNY_ZOOM = 1.8;            // tune live, then re-bake
     }
 
     // ----- Recolour a couple of specific model meshes by name -----
@@ -1186,6 +1215,66 @@ if (_rnPanel) {
 }
 window.openRunnerPanel = openRunnerPanel;
 
+// ===== In-shop bunny → cute welcome speech bubble =====
+// Shown after the click-zoom finishes; dismiss flies the camera home.
+const _bunnyEl = document.getElementById('bunny-speech');
+function _showBunnySpeech() {
+  if (!_bunnyEl) return;
+  _bunnyEl.classList.add('show');
+  _bunnyEl.setAttribute('aria-hidden', 'false');
+}
+function _hideBunnySpeech() {
+  if (!_bunnyEl || !_bunnyEl.classList.contains('show')) return;
+  _bunnyEl.classList.remove('show');
+  if (_bunnyEl.contains(document.activeElement)) document.activeElement.blur();
+  _bunnyEl.setAttribute('aria-hidden', 'true');
+  _panelOpen = false;                  // unblock scene clicks
+  if (window.flyHome) window.flyHome();
+}
+if (_bunnyEl) {
+  // Click anywhere on the bubble (incl. the "got it!" button) dismisses it.
+  _bunnyEl.addEventListener('click', _hideBunnySpeech);
+}
+
+// ===== Coordinate capture helper (console) =====
+// Run `captureBunny()` in the console, then click the bunny in the shop:
+// it logs a ready-to-bake BUNNY_TARGET line and snaps the (now visible)
+// proxy onto the hit point so you can confirm placement. Re-run to re-pick.
+// Capture-phase + stopImmediatePropagation so this one click doesn't also
+// trigger the normal scene routing.
+let _captureArmed = false;
+window.captureBunny = function captureBunny() {
+  _captureArmed = true;
+  console.log('%c[captureBunny] armed — now click the bunny in the shop…',
+              'color:#ff4fa8;font-weight:bold');
+};
+renderer.domElement.addEventListener('click', (event) => {
+  if (!_captureArmed) return;
+  event.stopImmediatePropagation();
+  _captureArmed = false;
+  const r = renderer.domElement.getBoundingClientRect();
+  _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+  _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+  _raycaster.setFromCamera(_pointer, camera);
+  const hit = _raycaster.intersectObjects(scene.children, true).find((h) =>
+    h.object && h.object.type === 'Mesh' &&
+    h.object.name !== 'bunny-target' && h.object.name !== 'dart-target'
+  );
+  if (!hit) { console.warn('[captureBunny] nothing hit — re-run and retry'); return; }
+  const x = +hit.point.x.toFixed(3);
+  const y = +hit.point.y.toFixed(3);
+  const z = +hit.point.z.toFixed(3);
+  if (_bunnyTarget) {
+    _bunnyTarget.position.set(x, y, z);
+    _bunnyTarget.visible = true;       // show where it landed
+  }
+  console.log(
+    `%c[captureBunny] const BUNNY_TARGET = { x: ${x}, y: ${y}, z: ${z}, r: ${BUNNY_TARGET.r} };`,
+    'color:#16a34a;font-weight:bold'
+  );
+  console.log('Paste that line to the assistant to bake it (re-run captureBunny() to re-pick).');
+}, true);
+
 // ===== Plaque hover + click (raycaster) =====
 // A raycaster shoots a ray from the camera through the cursor into the scene.
 const _raycaster = new THREE.Raycaster();
@@ -1195,6 +1284,8 @@ const _pointer = new THREE.Vector2();
 let _hoveredPlaque = null;
 // Invisible click-target over the round medallion; a hit opens Darts.
 let _dartTarget = null;
+// Invisible click-target over the in-shop bunny; a hit zooms in + greets.
+let _bunnyTarget = null;
 let _dartGlow = null;      // additive halo sprite on the dart medallion
 let _dartHot = false;      // pointer currently over the medallion
 // Dart medallion glow — tweak live then re-bake. rest = always-on glow,
@@ -1427,6 +1518,27 @@ renderer.domElement.addEventListener('click', (event) => {
     if (_raycaster.intersectObjects(_rabbitMeshes, true).length) {
       _playClickSfx();
       openRunnerPanel();
+      return;
+    }
+  }
+  // Clicking the bunny INSIDE the shop → zoom in + a cute welcome bubble.
+  if (_bunnyTarget) {
+    const r = renderer.domElement.getBoundingClientRect();
+    _pointer.x = ((event.clientX - r.left) / r.width) * 2 - 1;
+    _pointer.y = -((event.clientY - r.top) / r.height) * 2 + 1;
+    _raycaster.setFromCamera(_pointer, camera);
+    if (_raycaster.intersectObject(_bunnyTarget, true).length) {
+      _playClickSfx();
+      _panelOpen = true;               // block other scene clicks until done
+      controls.enabled = false;
+      controls.autoRotate = false;
+      if (_hoveredPlaque) { _clearHover(_hoveredPlaque); _hoveredPlaque = null; }
+      renderer.domElement.style.cursor = 'default';
+      // Zoom straight in along the current view toward the bunny.
+      const bp = _bunnyTarget.position;
+      const dir = camera.position.clone().sub(bp).normalize();
+      const toPos = bp.clone().addScaledVector(dir, window.BUNNY_ZOOM);
+      flyCamera(toPos, bp, 1200, _showBunnySpeech);
       return;
     }
   }
