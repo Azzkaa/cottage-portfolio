@@ -763,3 +763,36 @@ body > canvas {
 @media (pointer: fine) {
   .snake-dpad { display: none; }
 }
+
+/* ===== Mobile robustness =====
+   Mobile Safari/Chrome shrink the layout viewport as the URL bar shows/
+   hides, so 100vh overshoots and the scene/games get clipped under the
+   bar. `dvh` tracks the *visible* viewport; declared after the vh value
+   so older engines keep the vh fallback. */
+body > canvas {
+  height: 100dvh !important;
+}
+.snake-frame,
+.darts-frame,
+.shooter-frame,
+.runner-frame {
+  height: min(86dvh, 600px);
+}
+.panel-inner {
+  max-height: 82dvh;
+}
+@media (max-width: 560px) {
+  .panel-inner { max-height: 88dvh; }
+}
+
+/* Snappy, app-like taps: no 300ms delay, no grey tap flash, no
+   accidental double-tap zoom on controls. */
+button,
+a,
+.proj-link,
+.contact-btn,
+.panel-back,
+.intro-start {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}

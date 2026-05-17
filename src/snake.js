@@ -21,11 +21,17 @@ export function createSnakeGame(rootEl) {
   // Layout (recomputed in resize): grid size, square cell px, board origin.
   let COLS = 20, ROWS = 14, cell = CELL, ox = 0, oy = 0, vw = 600, vh = 400;
 
-  // Game state. phase: 'start' (idle) | 'play' | 'over' | 'credits' (terminal)
+  // Game state. phase: 'start' (idle) | 'play' | 'over' | 'credits'
   let snake, dir, nextDir, food, score, phase = 'start';
   let creditsT = 0;           // timestamp the Credits screen opened (fade-in)
+  let creditsSeen = false;    // Credits shown once → don't re-pop every eat
   let pops = [];              // brief expanding rings when a star is eaten
   let running = false, raf = 0, acc = 0, last = 0;
+  // 0..1 progress through the current step — used to glide the snake
+  // between grid cells so movement reads smooth, not steppy.
+  let renderFrac = 0;
+  // Pixel rect of the on-canvas "Keep playing" button (set in drawCredits).
+  let continueBtn = null;
 
   // Lay out a fresh round centred on the current grid.
   function newRound() {
@@ -35,6 +41,7 @@ export function createSnakeGame(rootEl) {
     nextDir = { x: 1, y: 0 };
     score = 0;
     pops = [];
+    creditsSeen = false;      // a brand-new game can earn the Credits again
     placeFood();
   }
 
@@ -109,14 +116,45 @@ export function createSnakeGame(rootEl) {
   }
   // Leave the Start / Game-Over screen and run a round.
   function begin() {
-    if (phase === 'credits') return;   // terminal screen — leave via Back
+    if (phase === 'credits') return;   // Credits uses continueGame() instead
     if (phase === 'over') newRound();
+    phase = 'play';
+    acc = 0; last = 0;
+  }
+
+  // Client (mouse/touch) coords → canvas drawing space. The ctx is
+  // dpr-scaled so drawing space == CSS px; the rect→canvas ratio corrects
+  // for any residual transform from the panel open transition.
+  function canvasPoint(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return {
+      x: (clientX - r.left) * (vw / r.width),
+      y: (clientY - r.top) * (vh / r.height),
+    };
+  }
+  function inContinue(clientX, clientY) {
+    if (!continueBtn) return false;
+    const p = canvasPoint(clientX, clientY);
+    return !!p && p.x >= continueBtn.x0 && p.x <= continueBtn.x1 &&
+                  p.y >= continueBtn.y0 && p.y <= continueBtn.y1;
+  }
+  // From the Credits screen: keep the snake & score exactly as they were
+  // and resume play. The credits-triggering star was eaten, so drop a
+  // fresh one. creditsSeen stays true → Credits won't re-pop this game.
+  function continueGame() {
+    if (phase !== 'credits') return;
+    placeFood();
     phase = 'play';
     acc = 0; last = 0;
   }
 
   function onKey(e) {
     const k = e.key.toLowerCase();
+    if (phase === 'credits') {                 // keyboard parity for the button
+      if (k === ' ' || k === 'enter') { continueGame(); e.preventDefault(); }
+      return;
+    }
     let d = null;
     if (k === 'arrowup' || k === 'w') d = [0, -1];
     else if (k === 'arrowdown' || k === 's') d = [0, 1];
@@ -140,6 +178,10 @@ export function createSnakeGame(rootEl) {
   }
   function onTouchEnd(e) {
     const t = e.changedTouches[0];
+    if (phase === 'credits') {                 // only the button is live here
+      if (inContinue(t.clientX, t.clientY)) continueGame();
+      return;
+    }
     const dx = t.clientX - tsx, dy = t.clientY - tsy;
     if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
       if (phase !== 'play') begin();
@@ -148,6 +190,19 @@ export function createSnakeGame(rootEl) {
     if (phase !== 'play') begin();
     if (Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
     else turn(0, dy > 0 ? 1 : -1);
+  }
+
+  // Mouse click anywhere on the board: start / restart (desktop had no
+  // pointer path before — only keys/touch/dpad — so clicking did nothing).
+  // No-op while playing; steering stays keys/swipe/dpad. A touch tap also
+  // synthesises a click, but that fires after onTouchEnd already set
+  // phase='play', so this stays a no-op then (no double-start).
+  function onMouseClick(e) {
+    if (phase === 'credits') {
+      if (inContinue(e.clientX, e.clientY)) continueGame();
+      return;
+    }
+    if (phase !== 'play') begin();
   }
 
   function onDpad(e) {
@@ -173,8 +228,15 @@ export function createSnakeGame(rootEl) {
     if (head.x === food.x && head.y === food.y) {
       score++;
       pops.push({ x: food.x, y: food.y, t: performance.now() });
-      if (score >= CREDITS_AT) { phase = 'credits'; creditsT = performance.now(); }
-      else placeFood();
+      if (score >= CREDITS_AT && !creditsSeen) {
+        creditsSeen = true;
+        phase = 'credits';
+        creditsT = performance.now();
+        // Food intentionally NOT replaced here — continueGame() drops a
+        // fresh star if the player taps "Keep playing".
+      } else {
+        placeFood();
+      }
     } else {
       snake.pop();
     }
@@ -288,13 +350,51 @@ export function createSnakeGame(rootEl) {
       ctx.font = `600 ${fs}px Quicksand, sans-serif`;
     }
     const lh = fs * 1.55;
-    // Centre the block in the star's wide mid-body (slightly below centre).
+    // Centre the block in the star's wide mid-body; the Keep-playing
+    // button sits clear below it at +0.30R.
     let ty = cy0 + R * 0.02 - ((lines.length - 1) / 2) * lh;
     for (const [t, col] of lines) {
       ctx.fillStyle = col;
       ctx.fillText(t, cx0, ty);
       ty += lh;
     }
+    ctx.restore();
+
+    // ---- "Keep playing" button — drawn AFTER the fade save/restore so
+    // it stays crisp & full-opacity. Its rect is cached in continueBtn
+    // for the click/tap hit-test. Tapping it resumes the saved game.
+    const bw = Math.min(R * 0.82, 210);
+    const bh = Math.max(34, Math.round(min * 0.052));
+    const bX = cx0 - bw / 2;
+    const bY = cy0 + R * 0.30 - bh / 2;
+    continueBtn = { x0: bX, y0: bY, x1: bX + bw, y1: bY + bh };
+
+    const bp = 0.5 + 0.5 * Math.sin(now / 360);   // gentle attention pulse
+    const rr = bh / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(bX + rr, bY);
+    ctx.arcTo(bX + bw, bY, bX + bw, bY + bh, rr);
+    ctx.arcTo(bX + bw, bY + bh, bX, bY + bh, rr);
+    ctx.arcTo(bX, bY + bh, bX, bY, rr);
+    ctx.arcTo(bX, bY, bX + bw, bY, rr);
+    ctx.closePath();
+    const bg = ctx.createLinearGradient(bX, bY, bX, bY + bh);
+    bg.addColorStop(0, '#FF9D4D');
+    bg.addColorStop(1, '#E9701C');
+    ctx.shadowColor = `rgba(255, 150, 80, ${0.4 + bp * 0.45})`;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 232, 200, 0.7)';
+    ctx.stroke();
+    ctx.fillStyle = '#2A0F08';
+    ctx.font = `700 ${Math.round(bh * 0.42)}px Quicksand, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('▶  Keep playing', cx0, bY + bh / 2 + 1);
     ctx.restore();
   }
 
@@ -342,7 +442,19 @@ export function createSnakeGame(rootEl) {
     // The snake: a soft neon bloom, a warm head→tail gradient body, a
     // glossy core ridge, a rounded tail, and a painted, cute face.
     if (snake.length) {
-      const pts = snake.map((s) => [cx(s.x), cy(s.y)]);
+      // Smooth interpolation: the head leads toward its next cell by
+      // `renderFrac`, and every body segment glides toward the cell its
+      // predecessor occupies. Consecutive snake cells are always
+      // orthogonally adjacent, so each lerp is a clean straight slide.
+      const f = renderFrac;
+      const pts = snake.map((s, i) => {
+        if (i === 0) {
+          return [cx(s.x) + dir.x * cell * f, cy(s.y) + dir.y * cell * f];
+        }
+        const p = snake[i - 1];
+        return [cx(s.x) + (p.x - s.x) * cell * f,
+                cy(s.y) + (p.y - s.y) * cell * f];
+      });
       const trace = () => {
         ctx.beginPath();
         ctx.moveTo(pts[0][0], pts[0][1]);
@@ -483,6 +595,12 @@ export function createSnakeGame(rootEl) {
       last = ts;
       let guard = 0;
       while (acc >= TICK_MS && phase === 'play' && guard++ < 5) { step(); acc -= TICK_MS; }
+      // How far into the next (not-yet-taken) step we are: glides the
+      // snake between cells so motion is smooth, not steppy. Falls to 0
+      // if a step just ended the game / opened Credits (static draw).
+      renderFrac = phase === 'play' ? Math.min(acc / TICK_MS, 1) : 0;
+    } else {
+      renderFrac = 0;
     }
     draw();
   }
@@ -493,6 +611,7 @@ export function createSnakeGame(rootEl) {
     running = true;
     acc = 0; last = 0;
     window.addEventListener('keydown', onKey);
+    canvas.addEventListener('click', onMouseClick);
     canvas.addEventListener('touchstart', onTouchStart, { passive: true });
     canvas.addEventListener('touchend', onTouchEnd, { passive: true });
     if (dpad) dpad.addEventListener('click', onDpad);
@@ -508,6 +627,7 @@ export function createSnakeGame(rootEl) {
     running = false;
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
+    canvas.removeEventListener('click', onMouseClick);
     canvas.removeEventListener('touchstart', onTouchStart);
     canvas.removeEventListener('touchend', onTouchEnd);
     if (dpad) dpad.removeEventListener('click', onDpad);

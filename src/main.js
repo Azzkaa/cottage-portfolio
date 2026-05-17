@@ -19,6 +19,12 @@ import { createShooterGame } from './shooter.js';
 // Self-contained "Bunny Hop" runner — opened by clicking the ground rabbit.
 import { createRunnerGame } from './runner.js';
 
+// Base path for runtime-loaded assets in public/ (audio, glTF models,
+// images, the résumé PDF). Vite sets this to '/' in dev and to the
+// configured base ('/cottage-portfolio/') in the GitHub Pages build, so
+// hardcoded '/foo' paths don't 404 when served from a sub-path.
+const ASSET = import.meta.env.BASE_URL;
+
 // Baked world position + radius of the round medallion's click-target,
 // derived from live console clicks on the medallion. To re-tune: nudge
 // window.dartTarget in the console, then re-bake these numbers.
@@ -87,8 +93,10 @@ camera.position.set(0, 1, 3); // reasonable distance
 
 // WebGL renderer with antialiasing for smoother edges.
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-// Match the device's pixel density and fill the window.
-renderer.setPixelRatio(window.devicePixelRatio);
+// Match the device's pixel density and fill the window. Capped at 2 so
+// high-DPR phones (often 3x) don't render ~2x the pixels for no visible
+// gain — the single biggest mobile perf lever here.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 // ACES tone mapping gives a filmic, balanced response to bright neon.
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -130,7 +138,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
 loader.load(
-  '/models/cottage.glb',
+  `${ASSET}models/cottage.glb`,
   // Success callback — runs once the model has downloaded and parsed.
   (gltf) => {
     // gltf.scene is the loaded model's root object; add it to our scene.
@@ -313,7 +321,7 @@ loader.load(
     // ===== Cute rabbit prop on the ground, in front of the name text =====
     // Loaded after the shop so we can place it relative to nameText/ground.
     loader.load(
-      '/models/cute_rabbit.glb',
+      `${ASSET}models/cute_rabbit.glb`,
       (rgltf) => {
         const rabbit = rgltf.scene;
         rabbit.traverse((o) => {
@@ -772,7 +780,7 @@ loader.load(
         aboutLabel.scale.set(_baseH * (w / h), _baseH, 1); // match image aspect
         aboutLabel.visible = true; // now safe to show (no blank flash)
       };
-      _img.src = '/about-label.jpg';
+      _img.src = `${ASSET}about-label.jpg`;
     }
 
     // Alias kept for the lighting code below.
@@ -976,6 +984,7 @@ let _camAnim = null;
 
 // Start a camera tween from the current pose to (toPos, toTarget).
 function flyCamera(toPos, toTarget, durMs, onDone) {
+  _playWhooshSfx();                       // whoosh on every scripted zoom/fly
   _camAnim = {
     fromPos: camera.position.clone(),     // where we start
     toPos: toPos.clone(),                 // where we end up
@@ -1606,7 +1615,7 @@ renderer.domElement.addEventListener('click', (event) => {
   if (p.name === 'floor-fullstack' || p.name === 'floor-researcher') {
     // Résumé lines: open the PDF in a new tab (noopener,noreferrer so the
     // opened page can't reach back via window.opener).
-    window.open('/Azka_Resume_18_1.pdf', '_blank', 'noopener,noreferrer');
+    window.open(`${ASSET}Azka_Resume_18_1.pdf`, '_blank', 'noopener,noreferrer');
   }
   if (p.name === 'floor-contact') {
     // CONTACT ME: open the dark Contact overlay (no camera move).
@@ -1621,6 +1630,8 @@ window.addEventListener('resize', () => {
   camera.aspect = width / height;        // fix stretched view
   camera.updateProjectionMatrix();       // apply the new aspect
   renderer.setSize(width, height);       // resize the canvas
+  composer.setSize(width, height);       // keep post-processing in sync
+                                         // (mobile rotate / URL-bar resize)
 });
 
 // ===== Intro overlay: loading → START → cinematic camera pan =====
@@ -1655,13 +1666,13 @@ function _beginAfterIntro() {
 // Audio: soft looping background music + a one-shot START chime. Both are
 // kicked off from the START click — a user gesture, which is what browsers
 // require before they'll allow audio to play.
-const _bgm = new Audio('/backgr0und.mpeg');
+const _bgm = new Audio(`${ASSET}backgr0und.mpeg`);
 _bgm.loop = true;
 _bgm.volume = 0.06;            // very low — it sits quietly under everything
-const _startSfx = new Audio('/start.mpeg');
+const _startSfx = new Audio(`${ASSET}start.mpeg`);
 _startSfx.volume = 0.6;
 // Soft UI tick shared by the star / ground-rabbit / dart-medallion hovers.
-const _hoverSfx = new Audio('/butt0n_1.mpeg');
+const _hoverSfx = new Audio(`${ASSET}butt0n_1.mpeg`);
 _hoverSfx.volume = 0.03;
 let _lastHoverSfx = 0;
 function _playHoverSfx() {
@@ -1675,7 +1686,7 @@ function _playHoverSfx() {
 // Generic UI click — plays for any DOM button/link that does something,
 // and for the 3D scene actions (wired into the canvas click handler). The
 // intro START button has its own chime, so it's skipped here.
-const _clickSfx = new Audio('/CIick.mpeg');
+const _clickSfx = new Audio(`${ASSET}CIick.mpeg`);
 _clickSfx.volume = 0.4;
 let _lastClickSfx = 0;
 function _playClickSfx() {
@@ -1690,6 +1701,19 @@ document.addEventListener('click', (e) => {
   if (!el || el.classList.contains('intro-start')) return;
   _playClickSfx();
 });
+
+// Camera-move whoosh — plays on every scripted fly (zoom in/out, dive,
+// flyHome, the START sweep). Wired into flyCamera() so it's a single hook.
+const _whooshSfx = new Audio(`${ASSET}wh00sh.mpeg`);
+_whooshSfx.volume = 0.25;
+let _lastWhooshSfx = 0;
+function _playWhooshSfx() {
+  const now = performance.now();
+  if (now - _lastWhooshSfx < 120) return;  // dedupe back-to-back flies
+  _lastWhooshSfx = now;
+  _whooshSfx.currentTime = 0;
+  _whooshSfx.play().catch(() => {});
+}
 
 // START → play the chime, fade the overlay out, jump the camera far
 // behind/above, then sweep it in to the opening pose. The looping music
