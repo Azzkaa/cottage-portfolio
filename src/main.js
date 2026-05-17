@@ -1759,7 +1759,7 @@ function _playHoverSfx() { _oneShot(_hoverBuf, 0.03, _hoverRef, 80); }
 // intro START button has its own chime, so it's skipped here.
 const _clickBuf = _loadSfx(`${ASSET}CIick.mpeg`);
 const _clickRef = { t: 0 };
-function _playClickSfx() { _oneShot(_clickBuf, 0.4, _clickRef, 60); }
+function _playClickSfx() { _oneShot(_clickBuf, 0.3, _clickRef, 60); }
 document.addEventListener('click', (e) => {
   const el = e.target.closest && e.target.closest('button, a[href]');
   if (!el || el.classList.contains('intro-start')) return;
@@ -1770,13 +1770,13 @@ document.addEventListener('click', (e) => {
 // flyHome, the START sweep). Wired into flyCamera() so it's a single hook.
 const _whooshBuf = _loadSfx(`${ASSET}wh00sh.mpeg`);
 const _whooshRef = { t: 0 };
-function _playWhooshSfx() { _oneShot(_whooshBuf, 0.1, _whooshRef, 120); }
+function _playWhooshSfx() { _oneShot(_whooshBuf, 0.08, _whooshRef, 120); }
 
 // One-shot START chime (was an <audio> element; now Web Audio so the
 // .mpeg MIME on GitHub Pages can't block it on iOS).
 const _startBuf = _loadSfx(`${ASSET}start.mpeg`);
 const _startRef = { t: 0 };
-function _playStartSfx() { _oneShot(_startBuf, 0.6, _startRef, 0); }
+function _playStartSfx() { _oneShot(_startBuf, 0.45, _startRef, 0); }
 
 // Looping background music via Web Audio (a looping AudioBufferSource
 // through a gain node). If START is pressed before the ~833 kB clip has
@@ -1796,7 +1796,7 @@ function _startBgm() {
   src.buffer = _bgmBuf.buf;
   src.loop = true;
   const g = _actx.createGain();
-  g.gain.value = 0.5;            // prominent — author wants it clearly audible
+  g.gain.value = 0.38;           // clearly audible but eased down a bit
   src.connect(g).connect(_actx.destination);
   src.start();
 }
